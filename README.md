@@ -1,6 +1,6 @@
 # BudgetBuddy
 
-💳 BudgetBuddy
+💳 BudgetBuddy version 1.0
 
 BudgetBuddy is a simple and intuitive personal finance tracker built in Python.
 It works like a digital wallet, letting you track deposits, withdrawals, and categories, with the ability to save/load transactions.
@@ -18,3 +18,7 @@ It works like a digital wallet, letting you track deposits, withdrawals, and cat
 💾 Save & Load — export/import transactions with CSV
 
 🎨 Wallet Graphic — app feels like a real wallet (icon included)
+
+Phase 1 is completed.
+
+
