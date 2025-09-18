@@ -3,7 +3,7 @@
 💳 BudgetBuddy v1.0
 
 BudgetBuddy is a simple and intuitive personal finance tracker built in Python.
-Designed like a digital wallet, it helps you manage your money in real time — track income, expenses, and categories, all stored safely in CSV files for persistence.
+Designed like a digital wallet, it helps you manage your money in real time track income, expenses, and categories, all stored safely in CSV files for persistence.
 
 This is Phase 1 (MVP) of the project: a wallet-style desktop app with light/dark mode, category-based expenses, and a transaction history log.
 
