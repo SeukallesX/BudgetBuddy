@@ -1,67 +1,83 @@
 # BudgetBuddy
 
-💳 BudgetBuddy v1.0
+📊 BudgetBuddy
 
-BudgetBuddy is a simple and intuitive personal finance tracker built in Python.
-Designed like a digital wallet, it helps you manage your money in real time track income, expenses, and categories, all stored safely in CSV files for persistence.
+AI-powered personal finance tracker with insights, visualizations, and interactive dashboard.
 
-This is Phase 1 (MVP) of the project: a wallet-style desktop app with light/dark mode, category-based expenses, and a transaction history log.
+🚀 Features
 
-🚀 Why BudgetBuddy?
+💰 Smart Wallet Tracking — add income & expenses, view balance instantly
 
-Managing money should feel natural, like opening your wallet.
-Instead of spreadsheets or cluttered finance apps, BudgetBuddy gives you a clean, wallet-inspired interface where you can:
+🤖 AI Categorization — automatically classifies transactions (Food, Transport, Entertainment, etc.)
 
-Instantly check your balance
+📈 Visual Analytics — pie charts, line graphs, and bar charts for spending insights
 
-Add or spend money with one click
+🔮 Spending Predictions — forecasts end-of-month spending and savings trends
 
-Categorize expenses (Food, Rent, Shopping, etc.)
+🖥️ Interactive Web App — Streamlit dashboard with live updates
 
-Track transactions in a history table
-
-✨ Features
-
-💰 Wallet Balance — see your money at a glance
-
-➕ Add Money — deposit income quickly
-
-➖ Spend Money — record expenses with categories
-
-📜 Transaction History — log deposits & expenses in a clean table
-
-💾 Save & Load — export/import transactions with CSV
-
-🎨 Wallet Graphic — app includes a wallet logo to feel like the real thing
-
-🌓 Light/Dark Mode — toggle theme with one button
+📂 Data Export — save your records to CSV for later analysis
 
 🛠️ Tech Stack
 
-Python 3.x
+Python (Pandas, NumPy) — data handling & analysis
 
-Tkinter (GUI)
+Streamlit — web app & interactive dashboard
 
-PIL / Pillow (for wallet logo handling)
+Matplotlib / Plotly — data visualization
 
-CSV (data storage)
+(Optional Advanced) Web3.py for crypto/Blockchain integration
 
-📌 Development Phases
-Phase 1: Core Wallet Tracker (MVP) ✅
+📸 Screenshots
 
-Wallet-like GUI
+(Add screenshots or GIFs here: dashboard view, chart examples, AI insights panel)
 
-Store transactions in CSV
+🏗️ Project Structure
+BudgetBuddyPro/
+│
+├─ app.py                 # Main Streamlit app
+├─ sample_transactions.csv # Example dataset
+├─ requirements.txt        # Dependencies
+├─ README.md               # Documentation
+└─ assets/                 # Images/icons (optional)
 
-Show wallet balance dynamically
+⚡ Quick Start
 
-Add expense categories (Food, Rent, Shopping, etc.)
+Clone the repo and run locally:
 
-Light/Dark theme support
+git clone https://github.com/yourusername/budgetbuddy-pro.git
+cd budgetbuddy-pro
+
+# (optional) Create virtual environment
+python -m venv venv
+source venv/bin/activate   # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+streamlit run app.py
 
 
-✅ Status
+Open http://localhost:8501 in your browser.
 
-Phase 1 completed.
-Currently tracking income & expenses with CSV storage, categories, balance updates, and theme customization.
+📌 Roadmap
 
+✅ Phase 1: CLI app with basic deposits/withdrawals
+
+✅ Phase 2: Web app with AI categorization + visualizations
+
+🔜 Phase 3:
+
+User authentication & persistent database (SQLite/Postgres)
+
+Export reports to PDF
+
+Budget goals & alerts
+
+Crypto wallet integration
+
+👩‍💻 About the Developer
+
+Built by Mariel Bravo — Computer Science student specializing in AI & Blockchain.
+Passionate about creating ethical, scalable, and data-driven applications that empower users.
