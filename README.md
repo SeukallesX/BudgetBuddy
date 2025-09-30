@@ -21,5 +21,10 @@
 
 ---
 ---
+## ⚡ Quick Start
 
+### Clone the repo
+```bash
+git clone https://github.com/SeukallesX/BudgetBuddy.git
+cd BudgetBuddy
 
