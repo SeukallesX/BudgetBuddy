@@ -4,7 +4,7 @@ BudgetBuddy is a Python-based personal finance tracker with AI-powered insights 
 
 ## 🚀 How to Run
 
-### Phase 1 (CLI Tracker)
+### Phase 1 and Phase2 
 ```bash
 cd phase1_cli
 python budgetbuddy_cli.py
