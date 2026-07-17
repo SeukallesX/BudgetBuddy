@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import AddTransactionModal, {
   type NewTransaction,
@@ -29,6 +29,8 @@ import {
 type Transaction = NewTransaction & {
   id: number;
 };
+
+const TRANSACTIONS_STORAGE_KEY = "budgetbuddy-transactions";
 
 const initialTransactions: Transaction[] = [
   {
@@ -73,10 +75,30 @@ function formatDate(date: string) {
 }
 
 export default function Dashboard() {
-  const [transactions, setTransactions] =
-    useState<Transaction[]>(initialTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const savedTransactions = localStorage.getItem(
+        TRANSACTIONS_STORAGE_KEY
+      );
+
+      if (!savedTransactions) {
+        return initialTransactions;
+      }
+
+      return JSON.parse(savedTransactions) as Transaction[];
+    } catch {
+      return initialTransactions;
+    }
+  });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(
+      TRANSACTIONS_STORAGE_KEY,
+      JSON.stringify(transactions)
+    );
+  }, [transactions]);
 
   const totals = useMemo(() => {
     const income = transactions
