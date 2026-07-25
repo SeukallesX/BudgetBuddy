@@ -1,72 +1,203 @@
-import { useState } from "react";
-import { X } from "lucide-react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useEffect,
+  useState,
+} from "react";
+
+import { Save, X } from "lucide-react";
+
+export type TransactionType = "income" | "expense";
 
 export type NewTransaction = {
   name: string;
   category: string;
-  amount: number;
-  type: "income" | "expense";
   date: string;
+  amount: number;
+  type: TransactionType;
+};
+
+export type EditableTransaction = NewTransaction & {
+  id: number;
 };
 
 type AddTransactionModalProps = {
   isOpen: boolean;
+  transactionToEdit?: EditableTransaction | null;
   onClose: () => void;
   onAdd: (transaction: NewTransaction) => void;
+  onUpdate: (transaction: EditableTransaction) => void;
 };
+
+type TransactionFormState = {
+  name: string;
+  category: string;
+  date: string;
+  amount: string;
+  type: TransactionType;
+};
+
+const getTodayDate = () => {
+  return new Date().toISOString().split("T")[0];
+};
+
+const getEmptyForm = (): TransactionFormState => ({
+  name: "",
+  category: "",
+  date: getTodayDate(),
+  amount: "",
+  type: "expense",
+});
 
 export default function AddTransactionModal({
   isOpen,
+  transactionToEdit = null,
   onClose,
   onAdd,
+  onUpdate,
 }: AddTransactionModalProps) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("Food");
-  const [amount, setAmount] = useState("");
-  const [type, setType] = useState<"income" | "expense">("expense");
-  const [date, setDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [form, setForm] = useState<TransactionFormState>(getEmptyForm);
+  const [error, setError] = useState("");
 
-  if (!isOpen) return null;
+  const isEditing = transactionToEdit !== null;
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const parsedAmount = Number(amount);
-
-    if (!name.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+  useEffect(() => {
+    if (!isOpen) {
       return;
     }
 
-    onAdd({
-      name: name.trim(),
-      category,
-      amount: parsedAmount,
-      type,
-      date,
-    });
+    setError("");
 
-    setName("");
-    setAmount("");
-    setCategory("Food");
-    setType("expense");
+    if (transactionToEdit) {
+      setForm({
+        name: transactionToEdit.name,
+        category: transactionToEdit.category,
+        date: transactionToEdit.date,
+        amount: transactionToEdit.amount.toString(),
+        type: transactionToEdit.type,
+      });
+
+      return;
+    }
+
+    setForm(getEmptyForm());
+  }, [isOpen, transactionToEdit]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscapeKey);
+
+    return () => {
+      document.removeEventListener("keydown", handleEscapeKey);
+    };
+  }, [isOpen, onClose]);
+
+  const handleInputChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = event.target;
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      [name]: value,
+    }));
+
+    if (error) {
+      setError("");
+    }
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedName = form.name.trim();
+    const trimmedCategory = form.category.trim();
+    const parsedAmount = Number(form.amount);
+
+    if (!trimmedName) {
+      setError("Enter a transaction name.");
+      return;
+    }
+
+    if (!trimmedCategory) {
+      setError("Select or enter a category.");
+      return;
+    }
+
+    if (!form.date) {
+      setError("Select a transaction date.");
+      return;
+    }
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError("Enter an amount greater than $0.");
+      return;
+    }
+
+    const transactionData: NewTransaction = {
+      name: trimmedName,
+      category: trimmedCategory,
+      date: form.date,
+      amount: parsedAmount,
+      type: form.type,
+    };
+
+    if (transactionToEdit) {
+      onUpdate({
+        id: transactionToEdit.id,
+        ...transactionData,
+      });
+    } else {
+      onAdd(transactionData);
+    }
+
+    setForm(getEmptyForm());
+    setError("");
     onClose();
   };
 
+  const handleBackdropClick = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  };
+
+  if (!isOpen) {
+    return null;
+  }
+
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
-      <div
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={handleBackdropClick}
+    >
+      <section
         className="transaction-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="transaction-modal-title"
-        onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-header">
           <div>
-            <span className="card-label">New activity</span>
-            <h2 id="transaction-modal-title">Add transaction</h2>
+            <span className="card-label">
+              {isEditing ? "Update activity" : "New activity"}
+            </span>
+
+            <h2 id="transaction-modal-title">
+              {isEditing ? "Edit transaction" : "Add transaction"}
+            </h2>
           </div>
 
           <button
@@ -75,90 +206,118 @@ export default function AddTransactionModal({
             aria-label="Close transaction form"
             onClick={onClose}
           >
-            <X size={19} />
+            <X size={20} />
           </button>
         </div>
 
         <form className="transaction-form" onSubmit={handleSubmit}>
-          <label>
-            Transaction name
+          <div className="form-group">
+            <label htmlFor="transaction-name">Transaction name</label>
+
             <input
+              id="transaction-name"
+              name="name"
               type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
               placeholder="Example: Groceries"
-              required
+              value={form.name}
+              onChange={handleInputChange}
+              autoFocus
             />
-          </label>
+          </div>
 
           <div className="form-row">
-            <label>
-              Type
+            <div className="form-group">
+              <label htmlFor="transaction-amount">Amount</label>
+
+              <input
+                id="transaction-amount"
+                name="amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={form.amount}
+                onChange={handleInputChange}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="transaction-type">Type</label>
+
               <select
-                value={type}
-                onChange={(event) =>
-                  setType(event.target.value as "income" | "expense")
-                }
+                id="transaction-type"
+                name="type"
+                value={form.type}
+                onChange={handleInputChange}
               >
                 <option value="expense">Expense</option>
                 <option value="income">Income</option>
               </select>
-            </label>
-
-            <label>
-              Amount
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                placeholder="0.00"
-                required
-              />
-            </label>
+            </div>
           </div>
 
           <div className="form-row">
-            <label>
-              Category
-              <select
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-              >
-                <option>Food</option>
-                <option>Transportation</option>
-                <option>Housing</option>
-                <option>Entertainment</option>
-                <option>Shopping</option>
-                <option>Income</option>
-                <option>Savings</option>
-                <option>Crypto</option>
-              </select>
-            </label>
+            <div className="form-group">
+              <label htmlFor="transaction-category">Category</label>
 
-            <label>
-              Date
+              <select
+                id="transaction-category"
+                name="category"
+                value={form.category}
+                onChange={handleInputChange}
+              >
+                <option value="">Select category</option>
+                <option value="Income">Income</option>
+                <option value="Food">Food</option>
+                <option value="Transportation">Transportation</option>
+                <option value="Housing">Housing</option>
+                <option value="Utilities">Utilities</option>
+                <option value="Entertainment">Entertainment</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Healthcare">Healthcare</option>
+                <option value="Education">Education</option>
+                <option value="Savings">Savings</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="transaction-date">Date</label>
+
               <input
+                id="transaction-date"
+                name="date"
                 type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                required
+                value={form.date}
+                onChange={handleInputChange}
               />
-            </label>
+            </div>
           </div>
 
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+
           <div className="modal-actions">
-            <button type="button" className="ghost-button" onClick={onClose}>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={onClose}
+            >
               Cancel
             </button>
 
             <button type="submit" className="primary-button">
-              Add transaction
+              <Save size={18} />
+
+              {isEditing ? "Save changes" : "Add transaction"}
             </button>
           </div>
         </form>
-      </div>
+      </section>
     </div>
   );
 }
