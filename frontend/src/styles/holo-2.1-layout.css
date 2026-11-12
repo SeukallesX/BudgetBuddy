@@ -1,0 +1,893 @@
+
+/* =========================================================
+   BudgetBuddy Holo 2.1
+   Complete Layout + Phase 4A Advanced Financial Analytics
+
+   Imported by Dashboard.tsx after the existing theme.
+   Preserves holo-theme.css and existing localStorage data.
+   ========================================================= */
+
+/* =========================================================
+   1. GLOBAL LAYOUT
+   ========================================================= */
+
+.holo-shell,
+.holo-shell *,
+.holo-shell *::before,
+.holo-shell *::after {
+  box-sizing: border-box;
+}
+
+.holo-shell {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.holo-shell .holo-sidebar {
+  flex: 0 0 260px;
+  width: 260px;
+  min-width: 0;
+}
+
+.holo-shell .holo-main {
+  flex: 1 1 0%;
+  width: 0;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.holo-shell .holo-topbar,
+.holo-shell .holo-content {
+  width: min(100%, 1600px);
+  margin-inline: auto;
+}
+
+.holo-shell .holo-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 0;
+  padding-inline: 24px;
+}
+
+.holo-topbar-left,
+.holo-topbar .page-heading {
+  min-width: 0;
+}
+
+.holo-shell .holo-content {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 20px;
+  padding: 24px;
+  align-items: start;
+}
+
+.holo-content > section {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+.holo-content > section > *,
+.holo-panel,
+.holo-wallet-card,
+.holo-ai-card {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* =========================================================
+   2. WALLET + AI HERO
+   ========================================================= */
+
+.holo-shell .holo-hero-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.holo-hero-grid > * {
+  min-width: 0;
+  height: 100%;
+}
+
+.holo-wallet-card .wallet-card-bottom {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.holo-wallet-card .wallet-card-bottom > div {
+  flex: 1 1 110px;
+}
+
+.holo-wallet-card .wallet-card-bottom > button {
+  flex: 0 0 auto;
+}
+
+/* =========================================================
+   3. FINANCIAL STATISTICS
+   ========================================================= */
+
+.holo-shell .holo-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.holo-stat-card {
+  min-width: 0;
+  height: 100%;
+}
+
+.holo-stat-card strong {
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   4. ANALYTICS + SAVINGS GOALS
+   ========================================================= */
+
+.holo-shell .holo-feature-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.45fr)
+    minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.holo-feature-grid > :only-child {
+  grid-column: 1 / -1;
+}
+
+.holo-feature-grid > * {
+  min-width: 0;
+}
+
+.holo-chart-panel,
+.holo-goal-panel {
+  padding: 20px;
+}
+
+.holo-chart-panel {
+  overflow: hidden;
+}
+
+.holo-chart-area {
+  width: 100%;
+  min-width: 0;
+  height: 310px;
+}
+
+.holo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.holo-chart-panel .holo-panel-header,
+.holo-goal-panel .holo-panel-header {
+  min-height: 44px;
+}
+
+.holo-goal-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+
+.holo-goal-amount {
+  min-width: 0;
+}
+
+.holo-goal-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.holo-goal-actions > button {
+  flex: 1 1 130px;
+  justify-content: center;
+}
+
+/* =========================================================
+   5. PHASE 4A — ANALYTICS SELECTORS
+   ========================================================= */
+
+.holo-analytics-selectors {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0 16px;
+}
+
+.holo-analytics-selectors label {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.holo-analytics-selectors label > span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a9c7;
+}
+
+.holo-analytics-selectors select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid rgba(55, 232, 255, 0.2);
+  border-radius: 10px;
+  background: rgba(12, 23, 43, 0.85);
+  color: #eaf6ff;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.holo-analytics-selectors select:hover {
+  border-color: rgba(55, 232, 255, 0.45);
+}
+
+.holo-analytics-selectors select:focus-visible {
+  outline: 2px solid #37e8ff;
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   6. PHASE 4A — CHART CONTROLS
+   ========================================================= */
+
+.holo-chart-panel .holo-chart-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.holo-chart-panel .holo-chart-controls button {
+  min-height: 34px;
+  padding: 7px 13px;
+  border: 1px solid rgba(148, 169, 199, 0.2);
+  border-radius: 9px;
+  background: rgba(17, 29, 51, 0.55);
+  color: #94a9c7;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.holo-chart-panel .holo-chart-controls button:hover {
+  border-color: rgba(55, 232, 255, 0.45);
+  color: #eaf6ff;
+}
+
+.holo-chart-panel .holo-chart-controls button.selected,
+.holo-chart-panel .holo-chart-controls button[aria-pressed="true"] {
+  border-color: rgba(55, 232, 255, 0.55);
+  background: rgba(55, 232, 255, 0.12);
+  color: #37e8ff;
+}
+
+.holo-chart-panel .holo-chart-controls button:focus-visible {
+  outline: 2px solid #37e8ff;
+  outline-offset: 2px;
+}
+
+.holo-chart-panel .holo-chart-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.holo-chart-panel .holo-chart-totals > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.holo-chart-panel .holo-chart-totals small {
+  color: #94a9c7;
+  font-size: 0.75rem;
+}
+
+.holo-chart-panel .holo-chart-totals strong {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+/* =========================================================
+   7. PHASE 4A — ADVANCED ANALYTICS METRICS
+   ========================================================= */
+
+.holo-analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.holo-analytics-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(55, 232, 255, 0.13);
+  border-radius: 14px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(55, 232, 255, 0.055),
+      rgba(136, 107, 255, 0.045)
+    ),
+    rgba(9, 19, 37, 0.42);
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.holo-analytics-metric:hover {
+  border-color: rgba(55, 232, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.holo-analytics-metric > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9eb5d2;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.holo-analytics-metric > span svg {
+  flex-shrink: 0;
+  color: #37e8ff;
+}
+
+.holo-analytics-metric > strong {
+  color: #f0f8ff;
+  font-size: clamp(1.1rem, 1.5vw, 1.45rem);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.holo-analytics-metric > strong.holo-green {
+  color: #00d9a0;
+}
+
+.holo-analytics-metric > strong.holo-pink {
+  color: #fa72dc;
+}
+
+.holo-analytics-metric > small {
+  color: #8196b4;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   8. PHASE 4A — NO ACTIVITY NOTICE
+   ========================================================= */
+
+.holo-analytics-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin: 16px 0;
+  border: 1px solid rgba(255, 190, 90, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 190, 90, 0.055);
+  color: #f2c879;
+}
+
+.holo-analytics-notice > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.holo-analytics-notice > div {
+  min-width: 0;
+}
+
+.holo-analytics-notice strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.84rem;
+}
+
+.holo-analytics-notice p {
+  margin: 0;
+  color: #b9a68a;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   9. PHASE 4A — SPENDING CATEGORY SUMMARY
+   ========================================================= */
+
+.holo-spending-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 169, 199, 0.15);
+}
+
+.holo-spending-summary > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(136, 107, 255, 0.15);
+  border-radius: 12px;
+  background: rgba(136, 107, 255, 0.055);
+}
+
+.holo-spending-summary small {
+  color: #94a9c7;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.holo-spending-summary strong {
+  color: #eaf6ff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.holo-spending-summary span {
+  color: #8ca4c2;
+  font-size: 0.73rem;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   10. DASHBOARD LOWER PANELS
+   ========================================================= */
+
+.holo-page-dashboard > .holo-transactions-panel {
+  grid-column: 1 / span 7;
+}
+
+.holo-page-dashboard > .holo-activity-panel {
+  grid-column: 8 / -1;
+}
+
+.holo-page-dashboard > .holo-insights-panel,
+.holo-page-dashboard > .holo-budget-panel {
+  grid-column: 1 / -1;
+}
+
+.holo-transaction {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.holo-transaction-details {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.holo-transaction-amount {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.holo-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.holo-search {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.holo-filter-bar select {
+  flex: 1 1 125px;
+  min-width: 0;
+}
+
+.holo-insights-grid,
+.holo-budget-grid {
+  width: 100%;
+  min-width: 0;
+}
+
+/* =========================================================
+   11. SAVINGS GOALS & MANAGER
+   ========================================================= */
+
+.holo-goal-select {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin: 14px 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(55, 232, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(12, 23, 43, 0.85);
+  color: #eaf6ff;
+  font: inherit;
+}
+
+.holo-goal-select:focus-visible {
+  outline: 2px solid #37e8ff;
+  outline-offset: 2px;
+}
+
+.holo-full-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.holo-manager-modal {
+  width: min(92vw, 620px);
+  max-height: min(85vh, 850px);
+  overflow-y: auto;
+}
+
+.holo-manager-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid rgba(55, 232, 255, 0.18);
+  border-radius: 13px;
+  background: rgba(55, 232, 255, 0.055);
+}
+
+.holo-manager-summary > span {
+  color: #94a9c7;
+  font-size: 0.8rem;
+}
+
+.holo-manager-summary > strong {
+  color: #eaf6ff;
+  font-size: 1.5rem;
+  overflow-wrap: anywhere;
+}
+
+.holo-manager-summary > small {
+  color: #8ca4c2;
+}
+
+.holo-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.holo-manager-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(148, 169, 199, 0.15);
+  border-radius: 13px;
+  background: rgba(12, 23, 43, 0.4);
+}
+
+.holo-manager-item > strong {
+  color: #eaf6ff;
+  font-size: 0.95rem;
+}
+
+.holo-manager-item > span {
+  color: #a9bed9;
+  font-size: 0.85rem;
+}
+
+.holo-manager-item > small {
+  color: #849ab8;
+  font-size: 0.75rem;
+}
+
+.holo-manager-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.holo-manager-actions > button {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.holo-manager-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.holo-manager-history h3 {
+  margin: 0 0 6px;
+  color: #eaf6ff;
+  font-size: 1rem;
+}
+
+.holo-manager-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(148, 169, 199, 0.12);
+  border-radius: 10px;
+  background: rgba(12, 23, 43, 0.35);
+}
+
+.holo-manager-history-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.holo-manager-history-row > span strong {
+  color: #eaf6ff;
+  font-size: 0.85rem;
+}
+
+.holo-manager-history-row > span small {
+  color: #8ca4c2;
+  font-size: 0.72rem;
+}
+
+.holo-manager-history-row > strong {
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+/* =========================================================
+   12. FULL-WIDTH DESTINATION PAGES
+   ========================================================= */
+
+.holo-page-wallet > .holo-feature-grid {
+  grid-column: 1 / -1;
+}
+
+.holo-page-transactions > .holo-transactions-panel,
+.holo-page-transactions > .holo-activity-panel,
+.holo-page-goals > .holo-feature-grid,
+.holo-page-advisor > .holo-insights-panel,
+.holo-page-settings > .holo-settings-panel {
+  grid-column: 1 / -1;
+}
+
+/* =========================================================
+   13. RESPONSIVE — TABLET / SMALL DESKTOP
+   ========================================================= */
+
+@media (max-width: 1200px) {
+  .holo-shell .holo-sidebar {
+    flex-basis: 230px;
+    width: 230px;
+  }
+
+  .holo-shell .holo-hero-grid,
+  .holo-shell .holo-feature-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .holo-shell .holo-stat-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .holo-page-dashboard > .holo-transactions-panel,
+  .holo-page-dashboard > .holo-activity-panel {
+    grid-column: 1 / -1;
+  }
+
+  .holo-analytics-metric > strong {
+    font-size: 1.3rem;
+  }
+}
+
+/* =========================================================
+   14. RESPONSIVE — MOBILE / TABLET
+   ========================================================= */
+
+@media (max-width: 820px) {
+  .holo-shell .holo-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 1001;
+    width: min(290px, 85vw);
+    max-width: 85vw;
+    transform: translateX(-105%);
+    transition: transform 250ms ease;
+  }
+
+  .holo-shell .holo-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .holo-shell .holo-main {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .holo-shell .holo-content {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .holo-shell .holo-topbar {
+    padding-inline: 16px;
+  }
+
+  .holo-chart-area {
+    height: 260px;
+  }
+
+  .holo-analytics-metrics {
+    gap: 10px;
+  }
+
+  .holo-analytics-metric {
+    padding: 13px;
+  }
+
+  .holo-spending-summary {
+    gap: 10px;
+  }
+}
+
+/* =========================================================
+   15. RESPONSIVE — SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 480px) {
+  .holo-shell .holo-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .holo-shell .holo-topbar {
+    flex-wrap: wrap;
+  }
+
+  .holo-goal-center {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .holo-goal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .holo-goal-actions > button {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .holo-transaction {
+    gap: 8px;
+  }
+
+  .holo-transaction-amount {
+    font-size: 0.85rem;
+  }
+
+  .holo-analytics-selectors {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .holo-analytics-selectors label {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .holo-analytics-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .holo-analytics-metric {
+    padding: 14px;
+  }
+
+  .holo-analytics-metric > strong {
+    font-size: 1.25rem;
+  }
+
+  .holo-spending-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .holo-chart-panel .holo-chart-totals {
+    gap: 8px;
+  }
+
+  .holo-chart-panel .holo-chart-totals strong {
+    font-size: 0.95rem;
+  }
+
+  .holo-manager-history-row {
+    align-items: flex-start;
+  }
+
+  .holo-manager-actions > button {
+    flex: 1 1 120px;
+  }
+}
+
+/* =========================================================
+   16. ACCESSIBILITY — REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .holo-shell .holo-sidebar {
+    transition: none;
+  }
+
+  .holo-analytics-metric,
+  .holo-analytics-selectors select,
+  .holo-chart-panel .holo-chart-controls button {
+    transition: none;
+  }
+
+  .holo-analytics-metric:hover {
+    transform: none;
+  }
+}

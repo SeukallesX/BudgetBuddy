@@ -17,7 +17,6 @@ import {
   Bot,
   Check,
   ChevronRight,
-  CircleDollarSign,
   CreditCard,
   LayoutDashboard,
   Menu,
@@ -59,6 +58,8 @@ import SavingsGoalModal, {
   type SavingsGoal,
   type SavingsGoalInput,
 } from "../components/SavingsGoalModal";
+
+import "../styles/holo-2.1-layout.css";
 
 import HoloEffects, {
   TiltCard,
@@ -321,6 +322,7 @@ function DashboardContent() {
     useState<ChartPeriod>(6);
   const [chartMode, setChartMode] =
     useState<ChartMode>("both");
+  const [chartAnchor, setChartAnchor] = useState<"latest" | "current">("latest");
 
   const [transactionModalOpen, setTransactionModalOpen] =
     useState(false);
@@ -385,7 +387,7 @@ function DashboardContent() {
       income,
       expenses,
       balance: income - expenses,
-      surplus: Math.max(0, income - expenses),
+      surplus: income - expenses,
     };
   }, [transactions]);
 
@@ -479,7 +481,13 @@ function DashboardContent() {
   );
 
   const chartData = useMemo<ChartPoint[]>(() => {
-    const today = new Date();
+    const mostRecent = transactions.reduce<string>((latest, transaction) => {
+      const month = getMonthKey(transaction.date);
+      return /^\d{4}-\d{2}$/.test(month) && month > latest ? month : latest;
+    }, "");
+    const today = chartAnchor === "latest" && mostRecent
+      ? new Date(`${mostRecent}-01T12:00:00`)
+      : new Date();
 
     return Array.from(
       { length: chartPeriod },
@@ -522,7 +530,7 @@ function DashboardContent() {
         };
       },
     );
-  }, [transactions, chartPeriod]);
+  }, [transactions, chartPeriod, chartAnchor]);
 
   const chartTotals = chartData.reduce(
     (result, point) => ({
@@ -531,6 +539,22 @@ function DashboardContent() {
     }),
     { income: 0, expenses: 0 },
   );
+
+  const latestChartMonth = chartData[chartData.length - 1];
+  const previousChartMonth = chartData[chartData.length - 2];
+  const periodNet = chartTotals.income - chartTotals.expenses;
+  const periodSavingsRate = chartTotals.income > 0
+    ? (periodNet / chartTotals.income) * 100
+    : null;
+  const chartHasActivity = chartData.some(
+    (point) => point.income !== 0 || point.expenses !== 0,
+  );
+  const monthExpenseDelta = latestChartMonth && previousChartMonth
+    ? latestChartMonth.expenses - previousChartMonth.expenses
+    : 0;
+  const monthIncomeDelta = latestChartMonth && previousChartMonth
+    ? latestChartMonth.income - previousChartMonth.income
+    : 0;
 
   const categorySpending = useMemo(() => {
     const amounts: Record<string, number> = {};
@@ -939,7 +963,7 @@ function DashboardContent() {
 
           <div>
             <strong>BudgetBuddy</strong>
-            <span>Holo 2.0 · Smart Wallet</span>
+            <span>Holo 2.1 · Smart Wallet</span>
           </div>
         </div>
 
@@ -1022,7 +1046,7 @@ function DashboardContent() {
           </div>
         </header>
 
-        <div className="holo-content">
+        <div className={`holo-content holo-page-${view}`}>
           {showWallet && (
             <section className="holo-hero-grid">
               <TiltCard className="holo-wallet-card">
@@ -1133,7 +1157,7 @@ function DashboardContent() {
                   color: "pink",
                 },
                 {
-                  label: "Net surplus",
+                  label: "Net cash flow",
                   value: totals.surplus,
                   icon: PiggyBank,
                   color: "violet",
@@ -1186,6 +1210,15 @@ function DashboardContent() {
                       <h2>Income & spending</h2>
                     </div>
 
+                    <div className="holo-analytics-selectors">
+                    <select
+                      aria-label="Chart ending month"
+                      value={chartAnchor}
+                      onChange={(event) => setChartAnchor(event.target.value as "latest" | "current")}
+                    >
+                      <option value="latest">Latest activity</option>
+                      <option value="current">Current month</option>
+                    </select>
                     <select
                       value={chartPeriod}
                       aria-label="Chart period"
@@ -1207,6 +1240,7 @@ function DashboardContent() {
                         12 months
                       </option>
                     </select>
+                    </div>
                   </div>
 
                   <div className="holo-chart-controls">
@@ -1249,6 +1283,38 @@ function DashboardContent() {
                       </strong>
                     </div>
                   </div>
+
+                  <div className="holo-analytics-metrics" aria-label="Selected period summary">
+                    <div className="holo-analytics-metric">
+                      <small>Net cash flow</small>
+                      <strong className={periodNet >= 0 ? "holo-green" : "holo-pink"}>{money(periodNet)}</strong>
+                      <span>Income minus expenses</span>
+                    </div>
+                    <div className="holo-analytics-metric">
+                      <small>Cash-flow rate</small>
+                      <strong>{periodSavingsRate === null ? "N/A" : `${periodSavingsRate.toFixed(1)}%`}</strong>
+                      <span>Net flow / income</span>
+                    </div>
+                    <div className="holo-analytics-metric">
+                      <small>Income vs prior month</small>
+                      <strong className={monthIncomeDelta >= 0 ? "holo-green" : "holo-pink"}>
+                        {monthIncomeDelta > 0 ? "+" : ""}{money(monthIncomeDelta)}
+                      </strong>
+                      <span>{latestChartMonth?.month ?? "—"} compared with {previousChartMonth?.month ?? "—"}</span>
+                    </div>
+                    <div className="holo-analytics-metric">
+                      <small>Expenses vs prior month</small>
+                      <strong className={monthExpenseDelta <= 0 ? "holo-green" : "holo-pink"}>
+                        {monthExpenseDelta > 0 ? "+" : ""}{money(monthExpenseDelta)}
+                      </strong>
+                      <span>Lower expenses are favorable</span>
+                    </div>
+                  </div>
+                  {!chartHasActivity && (
+                    <p className="holo-analytics-notice" role="status">
+                      No recorded transactions in this period. Try “Latest activity” or select a longer range.
+                    </p>
+                  )}
 
                   <div className="holo-chart-area">
                     <ResponsiveContainer
@@ -1952,6 +2018,23 @@ function DashboardContent() {
                 />
               </div>
 
+              {categorySpending.length > 0 && (
+                <div className="holo-spending-summary">
+                  <div>
+                    <small>Recorded expenses</small>
+                    <strong>{money(totals.expenses)}</strong>
+                  </div>
+                  <div>
+                    <small>Largest spending category</small>
+                    <strong>{categorySpending[0].category}</strong>
+                    <span>{percent(categorySpending[0].spent, totals.expenses).toFixed(1)}% of all recorded expenses</span>
+                  </div>
+                  <div>
+                    <small>Categories over limit</small>
+                    <strong>{categorySpending.filter((item) => item.over).length}</strong>
+                  </div>
+                </div>
+              )}
               {categorySpending.length === 0 ? (
                 <div className="holo-empty">
                   No expense categories yet.
@@ -1996,7 +2079,7 @@ function DashboardContent() {
                           {Math.round(
                             item.used,
                           )}
-                          % used
+                          % used · {percent(item.spent, totals.expenses).toFixed(1)}% of recorded expenses
                           {item.over
                             ? " · Over budget"
                             : ""}
