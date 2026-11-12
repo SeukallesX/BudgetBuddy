@@ -1,15 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
-
-import AddTransactionModal, {
-  type EditableTransaction,
-  type NewTransaction,
-} from "../components/AddTransactionModal";
 
 import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
+
+import {
+  Activity,
+  AlertTriangle,
+  ArrowDownLeft,
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
-  Bell,
+  BarChart3,
   Bot,
+  Check,
   ChevronRight,
   CircleDollarSign,
   CreditCard,
@@ -19,6 +25,7 @@ import {
   PiggyBank,
   Plus,
   ReceiptText,
+  RotateCcw,
   Search,
   Settings,
   ShieldCheck,
@@ -27,31 +34,83 @@ import {
   Trash2,
   TrendingUp,
   Wallet,
+  X,
+  Zap,
 } from "lucide-react";
 
 import {
   Bar,
-  BarChart,
   CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
+import AddTransactionModal, {
+  type EditableTransaction,
+  type NewTransaction,
+} from "../components/AddTransactionModal";
+
+import SavingsGoalModal, {
+  type SavingsGoal,
+  type SavingsGoalInput,
+} from "../components/SavingsGoalModal";
+
+import HoloEffects, {
+  TiltCard,
+  useHolo,
+} from "../components/HoloEffects";
+
 type Transaction = EditableTransaction;
-
+type ContributionType = "deposit" | "withdrawal";
 type ChartPeriod = 3 | 6 | 12;
+type ChartMode = "both" | "income" | "expenses";
+type ViewName =
+  | "dashboard"
+  | "wallet"
+  | "transactions"
+  | "goals"
+  | "advisor"
+  | "settings";
 
-type SpendingChartItem = {
-  month: string;
-  fullMonth: string;
-  expenses: number;
+type Contribution = {
+  id: string;
+  goalId: string;
+  amount: number;
+  type: ContributionType;
+  createdAt: string;
 };
 
-const TRANSACTIONS_STORAGE_KEY = "budgetbuddy-transactions";
+type ChartPoint = {
+  month: string;
+  label: string;
+  income: number;
+  expenses: number;
+  net: number;
+};
 
-const initialTransactions: Transaction[] = [
+const TRANSACTION_KEY = "budgetbuddy-transactions";
+const GOAL_KEY = "budgetbuddy-savings-goals";
+const CONTRIBUTION_KEY = "budgetbuddy-goal-contributions";
+
+const CATEGORY_BUDGETS: Record<string, number> = {
+  Food: 550,
+  Transportation: 400,
+  Entertainment: 300,
+  Housing: 1200,
+  Utilities: 350,
+  Shopping: 300,
+  Healthcare: 250,
+  Education: 400,
+  Savings: 500,
+  Other: 250,
+};
+
+const DEFAULT_TRANSACTIONS: Transaction[] = [
   {
     id: 1,
     name: "Part-time income",
@@ -76,365 +135,803 @@ const initialTransactions: Transaction[] = [
     amount: 55,
     type: "expense",
   },
-  {
-    id: 4,
-    name: "Streaming subscription",
-    category: "Entertainment",
-    date: "2026-06-18",
-    amount: 18,
-    type: "expense",
-  },
-  {
-    id: 5,
-    name: "Electric bill",
-    category: "Utilities",
-    date: "2026-05-12",
-    amount: 124,
-    type: "expense",
-  },
-  {
-    id: 6,
-    name: "Restaurant",
-    category: "Food",
-    date: "2026-04-22",
-    amount: 67,
-    type: "expense",
-  },
-  {
-    id: 7,
-    name: "School supplies",
-    category: "Education",
-    date: "2026-03-10",
-    amount: 92,
-    type: "expense",
-  },
-  {
-    id: 8,
-    name: "Phone bill",
-    category: "Utilities",
-    date: "2026-02-08",
-    amount: 75,
-    type: "expense",
-  },
 ];
 
-function formatCurrency(amount: number) {
-  return amount.toLocaleString("en-US", {
+function money(value: number) {
+  return value.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
   });
 }
 
-function formatCompactCurrency(amount: number) {
-  if (amount >= 1_000_000) {
-    return `$${(amount / 1_000_000).toFixed(1)}M`;
-  }
+function dateLabel(value: string) {
+  const date = new Date(
+    /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T00:00:00`
+      : value,
+  );
 
-  if (amount >= 1_000) {
-    return `$${(amount / 1_000).toFixed(1)}K`;
-  }
-
-  return `$${amount}`;
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
 }
 
-function formatDate(date: string) {
-  const parsedDate = new Date(`${date}T00:00:00`);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return date;
-  }
-
-  return parsedDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function dateTime(value: string) {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
-function parseTransactionDate(date: string) {
-  const [year, month, day] = date.split("-").map(Number);
-
-  if (!year || !month || !day) {
-    return null;
-  }
-
-  const parsedDate = new Date(year, month - 1, day);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null;
-  }
-
-  return parsedDate;
+function newId() {
+  return crypto.randomUUID();
 }
 
-function getMonthKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
+function readSaved<T>(
+  key: string,
+  fallback: T,
+  validate: (value: unknown) => value is T,
+): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
 
-  return `${year}-${month}`;
+    const value: unknown = JSON.parse(raw);
+    return validate(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
-function isValidTransaction(value: unknown): value is Transaction {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const transaction = value as Partial<Transaction>;
-
+function validTransactions(
+  value: unknown,
+): value is Transaction[] {
   return (
-    typeof transaction.id === "number" &&
-    typeof transaction.name === "string" &&
-    typeof transaction.category === "string" &&
-    typeof transaction.date === "string" &&
-    typeof transaction.amount === "number" &&
-    Number.isFinite(transaction.amount) &&
-    transaction.amount > 0 &&
-    (transaction.type === "income" ||
-      transaction.type === "expense")
+    Array.isArray(value) &&
+    value.every((item) => {
+      if (!item || typeof item !== "object") return false;
+
+      const t = item as Partial<Transaction>;
+
+      return (
+        typeof t.id === "number" &&
+        typeof t.name === "string" &&
+        typeof t.category === "string" &&
+        typeof t.date === "string" &&
+        typeof t.amount === "number" &&
+        Number.isFinite(t.amount) &&
+        t.amount > 0 &&
+        (t.type === "income" || t.type === "expense")
+      );
+    })
   );
 }
 
-export default function Dashboard() {
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const savedTransactions = localStorage.getItem(
-        TRANSACTIONS_STORAGE_KEY,
+function validGoals(value: unknown): value is SavingsGoal[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => {
+      if (!item || typeof item !== "object") return false;
+
+      const g = item as Partial<SavingsGoal>;
+
+      return (
+        typeof g.id === "string" &&
+        typeof g.name === "string" &&
+        typeof g.targetAmount === "number" &&
+        Number.isFinite(g.targetAmount) &&
+        g.targetAmount > 0 &&
+        typeof g.savedAmount === "number" &&
+        Number.isFinite(g.savedAmount) &&
+        g.savedAmount >= 0 &&
+        typeof g.deadline === "string" &&
+        typeof g.createdAt === "string"
       );
+    })
+  );
+}
 
-      if (!savedTransactions) {
-        return initialTransactions;
-      }
+function validContributions(
+  value: unknown,
+): value is Contribution[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => {
+      if (!item || typeof item !== "object") return false;
 
-      const parsedTransactions: unknown = JSON.parse(savedTransactions);
+      const c = item as Partial<Contribution>;
 
-      if (!Array.isArray(parsedTransactions)) {
-        return initialTransactions;
-      }
+      return (
+        typeof c.id === "string" &&
+        typeof c.goalId === "string" &&
+        typeof c.amount === "number" &&
+        Number.isFinite(c.amount) &&
+        c.amount > 0 &&
+        (c.type === "deposit" ||
+          c.type === "withdrawal") &&
+        typeof c.createdAt === "string"
+      );
+    })
+  );
+}
 
-      return parsedTransactions.filter(isValidTransaction);
-    } catch {
-      return initialTransactions;
-    }
-  });
+function percent(value: number, total: number) {
+  return total > 0 ? (value / total) * 100 : 0;
+}
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+function getMonthKey(value: string) {
+  return value.slice(0, 7);
+}
 
-  const [editingTransaction, setEditingTransaction] =
-    useState<Transaction | null>(null);
+function HoloOrb({ small = false }: { small?: boolean }) {
+  return (
+    <div
+      className={`holo-ai-orb ${small ? "orb-small" : ""}`}
+      aria-hidden="true"
+    >
+      <div className="orb-halo" />
+      <div className="orb-ring orb-ring-one" />
+      <div className="orb-ring orb-ring-two" />
+      <div className="orb-core">
+        <Sparkles size={small ? 22 : 35} />
+      </div>
+      <div className="orb-satellite orb-satellite-one" />
+      <div className="orb-satellite orb-satellite-two" />
+    </div>
+  );
+}
 
-  const [searchTerm, setSearchTerm] = useState("");
+function DashboardContent() {
+  const { settings, updateSettings, resetSettings } =
+    useHolo();
+
+  const [transactions, setTransactions] = useState<
+    Transaction[]
+  >(() =>
+    readSaved(
+      TRANSACTION_KEY,
+      DEFAULT_TRANSACTIONS,
+      validTransactions,
+    ),
+  );
+
+  const [goals, setGoals] = useState<SavingsGoal[]>(() =>
+    readSaved(GOAL_KEY, [], validGoals),
+  );
+
+  const [contributions, setContributions] = useState<
+    Contribution[]
+  >(() =>
+    readSaved(CONTRIBUTION_KEY, [], validContributions),
+  );
+
+  const [view, setView] = useState<ViewName>("dashboard");
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [transactionType, setTransactionType] =
+    useState("all");
+  const [transactionCategory, setTransactionCategory] =
+    useState("all");
+  const [sortOrder, setSortOrder] = useState("newest");
 
   const [chartPeriod, setChartPeriod] =
     useState<ChartPeriod>(6);
+  const [chartMode, setChartMode] =
+    useState<ChartMode>("both");
+
+  const [transactionModalOpen, setTransactionModalOpen] =
+    useState(false);
+  const [editingTransaction, setEditingTransaction] =
+    useState<Transaction | null>(null);
+
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [editingGoal, setEditingGoal] =
+    useState<SavingsGoal | null>(null);
+  const [goalManagerOpen, setGoalManagerOpen] =
+    useState(false);
+  const [selectedGoalId, setSelectedGoalId] =
+    useState<string | null>(null);
+
+  const [contributionGoalId, setContributionGoalId] =
+    useState<string | null>(null);
+  const [contributionType, setContributionType] =
+    useState<ContributionType>("deposit");
+  const [contributionAmount, setContributionAmount] =
+    useState("");
+  const [contributionError, setContributionError] =
+    useState("");
+
+  const [showAllActivity, setShowAllActivity] =
+    useState(false);
 
   useEffect(() => {
     localStorage.setItem(
-      TRANSACTIONS_STORAGE_KEY,
+      TRANSACTION_KEY,
       JSON.stringify(transactions),
     );
   }, [transactions]);
 
-  const totals = useMemo(() => {
-    const income = transactions
-      .filter((transaction) => transaction.type === "income")
-      .reduce(
-        (total, transaction) => total + transaction.amount,
-        0,
-      );
+  useEffect(() => {
+    localStorage.setItem(
+      GOAL_KEY,
+      JSON.stringify(goals),
+    );
+  }, [goals]);
 
-    const expenses = transactions
-      .filter((transaction) => transaction.type === "expense")
-      .reduce(
-        (total, transaction) => total + transaction.amount,
-        0,
-      );
+  useEffect(() => {
+    localStorage.setItem(
+      CONTRIBUTION_KEY,
+      JSON.stringify(contributions),
+    );
+  }, [contributions]);
+
+  const totals = useMemo(() => {
+    const income = transactions.reduce(
+      (sum, t) =>
+        sum + (t.type === "income" ? t.amount : 0),
+      0,
+    );
+
+    const expenses = transactions.reduce(
+      (sum, t) =>
+        sum + (t.type === "expense" ? t.amount : 0),
+      0,
+    );
 
     return {
       income,
       expenses,
       balance: income - expenses,
-      savings: Math.max(income - expenses, 0),
+      surplus: Math.max(0, income - expenses),
     };
   }, [transactions]);
 
+  const totalGoalSavings = goals.reduce(
+    (sum, g) => sum + g.savedAmount,
+    0,
+  );
+
+  const selectedGoal =
+    goals.find((g) => g.id === selectedGoalId) ??
+    goals[0] ??
+    null;
+
+  const contributionGoal =
+    goals.find((g) => g.id === contributionGoalId) ??
+    null;
+
+  const goalProgress = selectedGoal
+    ? Math.min(
+        100,
+        percent(
+          selectedGoal.savedAmount,
+          selectedGoal.targetAmount,
+        ),
+      )
+    : 0;
+
+  const goalMilestones = [25, 50, 75, 100];
+
   const filteredTransactions = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const q = search.toLowerCase().trim();
 
-    if (!normalizedSearch) {
-      return transactions;
-    }
+    const result = transactions.filter((t) => {
+      const matchesSearch =
+        !q ||
+        [
+          t.name,
+          t.category,
+          t.type,
+          t.date,
+          String(t.amount),
+          money(t.amount),
+        ].some((value) =>
+          value.toLowerCase().includes(q),
+        );
 
-    return transactions.filter((transaction) => {
-      const formattedAmount = formatCurrency(
-        transaction.amount,
-      ).toLowerCase();
+      const matchesType =
+        transactionType === "all" ||
+        t.type === transactionType;
+
+      const matchesCategory =
+        transactionCategory === "all" ||
+        t.category === transactionCategory;
 
       return (
-        transaction.name.toLowerCase().includes(normalizedSearch) ||
-        transaction.category
-          .toLowerCase()
-          .includes(normalizedSearch) ||
-        transaction.type.toLowerCase().includes(normalizedSearch) ||
-        transaction.date.includes(normalizedSearch) ||
-        transaction.amount
-          .toString()
-          .includes(normalizedSearch) ||
-        formattedAmount.includes(normalizedSearch)
+        matchesSearch &&
+        matchesType &&
+        matchesCategory
       );
     });
-  }, [searchTerm, transactions]);
 
-  const spendingChartData = useMemo<SpendingChartItem[]>(() => {
+    return [...result].sort((a, b) => {
+      if (sortOrder === "highest") {
+        return b.amount - a.amount;
+      }
+
+      if (sortOrder === "lowest") {
+        return a.amount - b.amount;
+      }
+
+      const comparison = a.date.localeCompare(b.date);
+
+      return sortOrder === "oldest"
+        ? comparison
+        : -comparison;
+    });
+  }, [
+    transactions,
+    search,
+    transactionType,
+    transactionCategory,
+    sortOrder,
+  ]);
+
+  const categories = useMemo(
+    () =>
+      Array.from(
+        new Set(transactions.map((t) => t.category)),
+      ).sort(),
+    [transactions],
+  );
+
+  const chartData = useMemo<ChartPoint[]>(() => {
     const today = new Date();
 
-    const monthEntries = Array.from(
+    return Array.from(
       { length: chartPeriod },
       (_, index) => {
-        const monthsBack = chartPeriod - 1 - index;
-
         const date = new Date(
           today.getFullYear(),
-          today.getMonth() - monthsBack,
+          today.getMonth() -
+            (chartPeriod - 1 - index),
           1,
         );
 
+        const key = [
+          date.getFullYear(),
+          String(date.getMonth() + 1).padStart(2, "0"),
+        ].join("-");
+
+        const items = transactions.filter(
+          (t) => getMonthKey(t.date) === key,
+        );
+
+        const income = items
+          .filter((t) => t.type === "income")
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const expenses = items
+          .filter((t) => t.type === "expense")
+          .reduce((sum, t) => sum + t.amount, 0);
+
         return {
-          key: getMonthKey(date),
           month: date.toLocaleDateString("en-US", {
             month: "short",
           }),
-          fullMonth: date.toLocaleDateString("en-US", {
+          label: date.toLocaleDateString("en-US", {
             month: "long",
             year: "numeric",
           }),
-          expenses: 0,
+          income,
+          expenses,
+          net: income - expenses,
         };
       },
     );
+  }, [transactions, chartPeriod]);
 
-    const expensesByMonth = transactions.reduce<
-      Record<string, number>
-    >((monthlyTotals, transaction) => {
-      if (transaction.type !== "expense") {
-        return monthlyTotals;
-      }
+  const chartTotals = chartData.reduce(
+    (result, point) => ({
+      income: result.income + point.income,
+      expenses: result.expenses + point.expenses,
+    }),
+    { income: 0, expenses: 0 },
+  );
 
-      const transactionDate = parseTransactionDate(
-        transaction.date,
-      );
+  const categorySpending = useMemo(() => {
+    const amounts: Record<string, number> = {};
 
-      if (!transactionDate) {
-        return monthlyTotals;
-      }
+    transactions.forEach((t) => {
+      if (t.type !== "expense") return;
 
-      const monthKey = getMonthKey(transactionDate);
+      amounts[t.category] =
+        (amounts[t.category] ?? 0) + t.amount;
+    });
 
-      monthlyTotals[monthKey] =
-        (monthlyTotals[monthKey] ?? 0) + transaction.amount;
+    return Object.entries(amounts)
+      .map(([category, spent]) => {
+        const budget =
+          CATEGORY_BUDGETS[category] ?? 300;
 
-      return monthlyTotals;
-    }, {});
+        return {
+          category,
+          spent,
+          budget,
+          used: percent(spent, budget),
+          over: spent > budget,
+        };
+      })
+      .sort((a, b) => b.spent - a.spent);
+  }, [transactions]);
 
-    return monthEntries.map((monthEntry) => ({
-      month: monthEntry.month,
-      fullMonth: monthEntry.fullMonth,
-      expenses: Number(
-        (expensesByMonth[monthEntry.key] ?? 0).toFixed(2),
-      ),
+  const insights = useMemo(() => {
+    const result: {
+      title: string;
+      message: string;
+      tone: "good" | "warning" | "neutral";
+    }[] = [];
+
+    if (transactions.length === 0) {
+      return [
+        {
+          title: "Start tracking",
+          message:
+            "Add your first transaction to generate insights.",
+          tone: "neutral" as const,
+        },
+      ];
+    }
+
+    if (totals.balance >= 0) {
+      result.push({
+        title: "Positive recorded balance",
+        message: `Your recorded income exceeds expenses by ${money(
+          totals.balance,
+        )}.`,
+        tone: "good",
+      });
+    } else {
+      result.push({
+        title: "Negative recorded balance",
+        message: `Recorded expenses exceed income by ${money(
+          Math.abs(totals.balance),
+        )}.`,
+        tone: "warning",
+      });
+    }
+
+    const top = categorySpending[0];
+
+    if (top) {
+      result.push({
+        title: "Largest expense category",
+        message: `${top.category} accounts for ${money(
+          top.spent,
+        )} of your recorded spending.`,
+        tone: "neutral",
+      });
+    }
+
+    const overBudget = categorySpending.filter(
+      (item) => item.over,
+    );
+
+    if (overBudget.length > 0) {
+      result.push({
+        title: "Budget alert",
+        message: `${overBudget.length} ${
+          overBudget.length === 1
+            ? "category is"
+            : "categories are"
+        } above the configured budget limit.`,
+        tone: "warning",
+      });
+    } else if (categorySpending.length > 0) {
+      result.push({
+        title: "Categories within limits",
+        message:
+          "Your recorded category totals are within their configured limits.",
+        tone: "good",
+      });
+    }
+
+    if (goals.length > 0) {
+      result.push({
+        title: "Savings goals",
+        message: `You have ${goals.length} ${
+          goals.length === 1 ? "goal" : "goals"
+        } with ${money(totalGoalSavings)} recorded in savings.`,
+        tone: "neutral",
+      });
+    }
+
+    return result;
+  }, [
+    transactions.length,
+    totals.balance,
+    categorySpending,
+    goals.length,
+    totalGoalSavings,
+  ]);
+
+  const activity = useMemo(() => {
+    const transactionItems = transactions.map((t) => ({
+      id: `transaction-${t.id}`,
+      title: t.name,
+      subtitle: t.category,
+      date: t.date,
+      amount: t.amount,
+      type: t.type,
     }));
-  }, [chartPeriod, transactions]);
 
-  const chartExpensesTotal = useMemo(() => {
-    return spendingChartData.reduce(
-      (total, month) => total + month.expenses,
-      0,
-    );
-  }, [spendingChartData]);
+    const contributionItems = contributions
+      .filter((c) =>
+        goals.some((g) => g.id === c.goalId),
+      )
+      .map((c) => {
+        const goal = goals.find(
+          (g) => g.id === c.goalId,
+        );
 
-  const highestSpendingMonth = useMemo(() => {
-    if (spendingChartData.length === 0) {
-      return null;
-    }
+        return {
+          id: `contribution-${c.id}`,
+          title:
+            c.type === "deposit"
+              ? "Savings deposit"
+              : "Savings withdrawal",
+          subtitle: goal?.name ?? "Savings goal",
+          date: c.createdAt,
+          amount: c.amount,
+          type: c.type,
+        };
+      });
 
-    return spendingChartData.reduce((highest, current) =>
-      current.expenses > highest.expenses ? current : highest,
-    );
-  }, [spendingChartData]);
+    return [...transactionItems, ...contributionItems]
+      .sort((a, b) => {
+        const left =
+          dateTime(a.date) ||
+          dateTime(`${a.date}T00:00:00`);
+        const right =
+          dateTime(b.date) ||
+          dateTime(`${b.date}T00:00:00`);
 
-  const handleOpenAddModal = () => {
+        return right - left;
+      });
+  }, [transactions, contributions, goals]);
+
+  function navigate(next: ViewName) {
+    setView(next);
+    setMobileOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openAddTransaction() {
     setEditingTransaction(null);
-    setIsModalOpen(true);
-  };
+    setTransactionModalOpen(true);
+  }
 
-  const handleOpenEditModal = (transaction: Transaction) => {
-    setEditingTransaction(transaction);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  function closeTransactionModal() {
     setEditingTransaction(null);
-  };
+    setTransactionModalOpen(false);
+  }
 
-  const handleAddTransaction = (
-    newTransaction: NewTransaction,
-  ) => {
-    const transaction: Transaction = {
-      id: Date.now(),
-      ...newTransaction,
-    };
-
-    setTransactions((currentTransactions) => [
-      transaction,
-      ...currentTransactions,
+  function addTransaction(input: NewTransaction) {
+    setTransactions((current) => [
+      {
+        ...input,
+        id: Date.now() + Math.random(),
+      },
+      ...current,
     ]);
-  };
 
-  const handleUpdateTransaction = (
-    updatedTransaction: Transaction,
-  ) => {
-    setTransactions((currentTransactions) =>
-      currentTransactions.map((transaction) =>
-        transaction.id === updatedTransaction.id
-          ? updatedTransaction
-          : transaction,
+    closeTransactionModal();
+  }
+
+  function updateTransaction(input: Transaction) {
+    setTransactions((current) =>
+      current.map((t) =>
+        t.id === input.id ? input : t,
       ),
     );
 
-    setEditingTransaction(null);
-  };
+    closeTransactionModal();
+  }
 
-  const handleDeleteTransaction = (transactionId: number) => {
-    const transactionToDelete = transactions.find(
-      (transaction) => transaction.id === transactionId,
-    );
-
-    if (!transactionToDelete) {
+  function deleteTransaction(t: Transaction) {
+    if (!window.confirm(`Delete "${t.name}"?`)) {
       return;
     }
 
-    const shouldDelete = window.confirm(
-      `Delete "${transactionToDelete.name}"? This action cannot be undone.`,
+    setTransactions((current) =>
+      current.filter((item) => item.id !== t.id),
     );
+  }
 
-    if (!shouldDelete) {
+  function openGoalModal(goal: SavingsGoal | null = null) {
+    setEditingGoal(goal);
+    setGoalModalOpen(true);
+  }
+
+  function saveGoal(input: SavingsGoalInput) {
+    if (editingGoal) {
+      setGoals((current) =>
+        current.map((goal) =>
+          goal.id === editingGoal.id
+            ? {
+                ...goal,
+                name: input.name,
+                targetAmount: input.targetAmount,
+                deadline: input.deadline,
+              }
+            : goal,
+        ),
+      );
+    } else {
+      const goal: SavingsGoal = {
+        id: newId(),
+        name: input.name,
+        targetAmount: input.targetAmount,
+        savedAmount: 0,
+        deadline: input.deadline,
+        createdAt: new Date().toISOString(),
+      };
+
+      setGoals((current) => [...current, goal]);
+      setSelectedGoalId(goal.id);
+    }
+
+    setGoalModalOpen(false);
+    setEditingGoal(null);
+  }
+
+  function deleteGoal(goal: SavingsGoal) {
+    if (
+      !window.confirm(
+        `Delete "${goal.name}" and its contribution history?`,
+      )
+    ) {
       return;
     }
 
-    setTransactions((currentTransactions) =>
-      currentTransactions.filter(
-        (transaction) => transaction.id !== transactionId,
+    setGoals((current) =>
+      current.filter((g) => g.id !== goal.id),
+    );
+
+    setContributions((current) =>
+      current.filter((c) => c.goalId !== goal.id),
+    );
+
+    if (selectedGoalId === goal.id) {
+      setSelectedGoalId(null);
+    }
+
+    if (contributionGoalId === goal.id) {
+      setContributionGoalId(null);
+    }
+  }
+
+  function openContribution(
+    goal: SavingsGoal,
+    type: ContributionType,
+  ) {
+    setContributionGoalId(goal.id);
+    setContributionType(type);
+    setContributionAmount("");
+    setContributionError("");
+  }
+
+  function saveContribution(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    if (!contributionGoal) return;
+
+    const amount = Number(contributionAmount);
+    const rounded = Math.round(amount * 100) / 100;
+
+    if (!Number.isFinite(amount) || rounded <= 0) {
+      setContributionError("Enter a valid amount.");
+      return;
+    }
+
+    if (
+      contributionType === "withdrawal" &&
+      rounded > contributionGoal.savedAmount
+    ) {
+      setContributionError(
+        "You cannot withdraw more than the saved amount.",
+      );
+      return;
+    }
+
+    const delta =
+      contributionType === "deposit"
+        ? rounded
+        : -rounded;
+
+    setGoals((current) =>
+      current.map((g) =>
+        g.id === contributionGoal.id
+          ? {
+              ...g,
+              savedAmount:
+                Math.round(
+                  (g.savedAmount + delta) * 100,
+                ) / 100,
+            }
+          : g,
       ),
     );
 
-    if (editingTransaction?.id === transactionId) {
-      handleCloseModal();
-    }
-  };
+    setContributions((current) => [
+      {
+        id: newId(),
+        goalId: contributionGoal.id,
+        amount: rounded,
+        type: contributionType,
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ]);
+
+    setContributionGoalId(null);
+    setContributionAmount("");
+    setContributionError("");
+  }
+
+  const navItems = [
+    {
+      id: "dashboard" as const,
+      label: "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      id: "wallet" as const,
+      label: "Wallet",
+      icon: Wallet,
+    },
+    {
+      id: "transactions" as const,
+      label: "Transactions",
+      icon: ReceiptText,
+    },
+    {
+      id: "goals" as const,
+      label: "Savings Goals",
+      icon: Target,
+    },
+    {
+      id: "advisor" as const,
+      label: "AI Advisor",
+      icon: Bot,
+    },
+    {
+      id: "settings" as const,
+      label: "Holo Settings",
+      icon: Settings,
+    },
+  ];
+
+  const showOverview = view === "dashboard";
+  const showWallet = showOverview || view === "wallet";
+  const showAnalytics = showOverview || view === "wallet";
+  const showGoals = showOverview || view === "goals";
+  const showTransactions =
+    showOverview || view === "transactions";
+  const showInsights = showOverview || view === "advisor";
+  const showActivity =
+    showOverview || view === "transactions";
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="app-shell holo-shell">
+      {mobileOpen && (
+        <button
+          type="button"
+          className="holo-mobile-overlay"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`sidebar holo-sidebar ${
+          mobileOpen ? "mobile-open" : ""
+        }`}
+      >
         <div className="brand">
           <div className="brand-icon">
             <Wallet size={22} />
@@ -442,585 +939,1556 @@ export default function Dashboard() {
 
           <div>
             <strong>BudgetBuddy</strong>
-            <span>Smart Wallet</span>
+            <span>Holo 2.0 · Smart Wallet</span>
           </div>
         </div>
 
-        <nav className="sidebar-nav" aria-label="Main navigation">
-          <a className="nav-item active" href="#dashboard">
-            <LayoutDashboard size={19} />
-            Dashboard
-          </a>
+        <nav
+          className="sidebar-nav"
+          aria-label="Main navigation"
+        >
+          {navItems.map((item) => {
+            const Icon = item.icon;
 
-          <a className="nav-item" href="#wallet">
-            <CreditCard size={19} />
-            Wallet
-          </a>
-
-          <a className="nav-item" href="#transactions">
-            <ReceiptText size={19} />
-            Transactions
-          </a>
-
-          <a className="nav-item" href="#goals">
-            <Target size={19} />
-            Savings Goals
-          </a>
-
-          <a className="nav-item" href="#advisor">
-            <Bot size={19} />
-            AI Advisor
-          </a>
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`nav-item holo-nav-button ${
+                  view === item.id ? "active" : ""
+                }`}
+                onClick={() => navigate(item.id)}
+              >
+                <Icon size={19} />
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="sidebar-bottom">
-          <a className="nav-item" href="#settings">
-            <Settings size={19} />
-            Settings
-          </a>
-
           <div className="security-card">
             <ShieldCheck size={22} />
-
             <div>
-              <strong>Wallet protected</strong>
-              <span>Security score: 92%</span>
+              <strong>Local preview mode</strong>
+              <span>
+                Blockchain connection pending
+              </span>
             </div>
           </div>
         </div>
       </aside>
 
-      <main className="main-content">
-        <header className="topbar">
-          <button
-            type="button"
-            className="icon-button mobile-menu"
-            aria-label="Open menu"
-          >
-            <Menu size={21} />
-          </button>
+      <main className="main-content holo-main">
+        <header className="topbar holo-topbar">
+          <div className="holo-topbar-left">
+            <button
+              type="button"
+              className="icon-button mobile-menu"
+              aria-label="Open navigation"
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu size={21} />
+            </button>
 
-          <div className="page-heading">
-            <p>Welcome back</p>
-            <h1>Financial Overview</h1>
+            <div className="page-heading">
+              <p>BudgetBuddy · Holographic Interface</p>
+
+              <h1>
+                {navItems.find((item) => item.id === view)
+                  ?.label ?? "Dashboard"}
+              </h1>
+            </div>
           </div>
 
           <div className="topbar-actions">
-            <label className="search-box">
-              <Search size={18} />
-
-              <input
-                type="search"
-                placeholder="Search transactions"
-                aria-label="Search transactions"
-                value={searchTerm}
-                onChange={(event) =>
-                  setSearchTerm(event.target.value)
-                }
-              />
-            </label>
+            <button
+              type="button"
+              className="holo-status-pill"
+              onClick={() => navigate("settings")}
+            >
+              <span className="holo-status-dot" />
+              Holo active
+            </button>
 
             <button
               type="button"
-              className="icon-button"
-              aria-label="Notifications"
+              className="wallet-button"
+              onClick={() => navigate("wallet")}
             >
-              <Bell size={20} />
-              <span className="notification-dot" />
-            </button>
-
-            <button type="button" className="wallet-button">
-              <span className="wallet-status" />
-              0xA91...3Fd2
+              <Wallet size={16} />
+              Wallet preview
             </button>
           </div>
         </header>
 
-        <section className="balance-section" id="dashboard">
-          <div className="balance-card">
-            <div className="balance-card-header">
-              <div>
-                <span className="card-label">
-                  Total balance
-                </span>
-
-                <h2>{formatCurrency(totals.balance)}</h2>
-              </div>
-
-              <div className="balance-icon">
-                <Wallet size={25} />
-              </div>
-            </div>
-
-            <div className="balance-change">
-              <span>
-                <TrendingUp size={16} />
-                Live
-              </span>
-
-              based on recorded transactions
-            </div>
-
-            <div className="balance-actions">
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleOpenAddModal}
-              >
-                <Plus size={18} />
-                Add transaction
-              </button>
-
-              <button type="button" className="ghost-button">
-                View wallet
-              </button>
-            </div>
-          </div>
-
-          <div className="ai-highlight" id="advisor">
-            <div className="ai-orb">
-              <Sparkles size={28} />
-            </div>
-
-            <div className="ai-highlight-copy">
-              <span className="card-label">
-                BudgetBuddy AI
-              </span>
-
-              <h2>Your financial snapshot</h2>
-
-              <p>
-                Your balance is {formatCurrency(totals.balance)}.
-                You have recorded{" "}
-                {formatCurrency(totals.expenses)} in expenses and{" "}
-                {formatCurrency(totals.income)} in income.
-              </p>
-
-              <button type="button" className="text-button">
-                View full insight
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="stats-grid">
-          <article className="stat-card">
-            <div className="stat-card-top">
-              <div className="stat-icon income-icon">
-                <ArrowUpRight size={20} />
-              </div>
-
-              <span className="trend positive">Income</span>
-            </div>
-
-            <span className="card-label">Total income</span>
-            <h3>{formatCurrency(totals.income)}</h3>
-            <p>Income from recorded transactions</p>
-          </article>
-
-          <article className="stat-card">
-            <div className="stat-card-top">
-              <div className="stat-icon expense-icon">
-                <ArrowDownRight size={20} />
-              </div>
-
-              <span className="trend positive">Expenses</span>
-            </div>
-
-            <span className="card-label">Total expenses</span>
-            <h3>{formatCurrency(totals.expenses)}</h3>
-            <p>Expenses from recorded transactions</p>
-          </article>
-
-          <article className="stat-card">
-            <div className="stat-card-top">
-              <div className="stat-icon savings-icon">
-                <PiggyBank size={20} />
-              </div>
-
-              <span className="trend positive">Available</span>
-            </div>
-
-            <span className="card-label">Total savings</span>
-            <h3>{formatCurrency(totals.savings)}</h3>
-            <p>Current income minus expenses</p>
-          </article>
-
-          <article className="stat-card">
-            <div className="stat-card-top">
-              <div className="stat-icon health-icon">
-                <ShieldCheck size={20} />
-              </div>
-
-              <span className="trend positive">Excellent</span>
-            </div>
-
-            <span className="card-label">
-              Financial health
-            </span>
-
-            <h3>92 / 100</h3>
-            <p>Your finances are currently stable</p>
-          </article>
-        </section>
-
-        <section className="dashboard-grid">
-          <article className="panel spending-panel">
-            <div className="panel-header">
-              <div>
-                <span className="card-label">
-                  Monthly activity
-                </span>
-
-                <h2>Spending overview</h2>
-              </div>
-
-              <select
-                aria-label="Spending period"
-                value={chartPeriod}
-                onChange={(event) =>
-                  setChartPeriod(
-                    Number(event.target.value) as ChartPeriod,
-                  )
-                }
-              >
-                <option value={3}>Last 3 months</option>
-                <option value={6}>Last 6 months</option>
-                <option value={12}>Last 12 months</option>
-              </select>
-            </div>
-
-            <div className="chart-summary">
-              <div>
-                <strong>
-                  {formatCurrency(chartExpensesTotal)}
-                </strong>
-
-                <span>
-                  Expenses over the last {chartPeriod} months
-                </span>
-              </div>
-
-              {highestSpendingMonth &&
-                highestSpendingMonth.expenses > 0 && (
-                  <div className="chart-highest-month">
-                    <span>Highest month</span>
-
-                    <strong>
-                      {highestSpendingMonth.month} ·{" "}
-                      {formatCurrency(
-                        highestSpendingMonth.expenses,
-                      )}
-                    </strong>
-                  </div>
-                )}
-            </div>
-
-            <div className="spending-chart-container">
-              {chartExpensesTotal === 0 ? (
-                <div className="chart-empty-state">
-                  <ReceiptText size={28} />
-
-                  <strong>No expenses in this period</strong>
-
+        <div className="holo-content">
+          {showWallet && (
+            <section className="holo-hero-grid">
+              <TiltCard className="holo-wallet-card">
+                <div className="wallet-card-top">
                   <span>
-                    Add an expense transaction to populate the
-                    chart.
+                    <Wallet size={19} />
+                    BUDGETBUDDY / DIGITAL WALLET
+                  </span>
+
+                  <span className="holo-chip">
+                    <Activity size={15} />
+                    LOCAL
                   </span>
                 </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={spendingChartData}
-                    margin={{
-                      top: 12,
-                      right: 8,
-                      left: -12,
-                      bottom: 0,
-                    }}
+
+                <div className="wallet-card-center">
+                  <span className="holo-eyebrow">
+                    TOTAL RECORDED BALANCE
+                  </span>
+
+                  <h2>{money(totals.balance)}</h2>
+
+                  <p>
+                    <span className="holo-status-dot" />
+                    Updated from local transactions
+                  </p>
+                </div>
+
+                <div className="wallet-card-bottom">
+                  <div>
+                    <small>INCOME</small>
+                    <strong>
+                      {money(totals.income)}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <small>EXPENSES</small>
+                    <strong>
+                      {money(totals.expenses)}
+                    </strong>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={openAddTransaction}
                   >
-                    <CartesianGrid
-                      strokeDasharray="4 4"
-                      vertical={false}
-                      stroke="rgba(148, 163, 184, 0.14)"
-                    />
+                    <Plus size={17} />
+                    Add transaction
+                  </button>
+                </div>
 
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fill: "#8f96aa",
-                        fontSize: 12,
-                      }}
-                      dy={8}
-                    />
+                <div
+                  className="wallet-holo-emblem"
+                  aria-hidden="true"
+                >
+                  <div className="wallet-emblem-ring" />
+                  <CreditCard size={65} />
+                </div>
+              </TiltCard>
 
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{
-                        fill: "#8f96aa",
-                        fontSize: 11,
-                      }}
-                      tickFormatter={(value) =>
-                        formatCompactCurrency(Number(value))
-                      }
-                      width={58}
-                    />
+              <div className="holo-ai-card">
+                <HoloOrb />
 
-                    <Tooltip
-                      cursor={{
-                        fill: "rgba(111, 95, 255, 0.06)",
-                      }}
-                      contentStyle={{
-                        border:
-                          "1px solid rgba(148, 163, 184, 0.16)",
-                        borderRadius: "12px",
-                        background: "#171923",
-                        boxShadow:
-                          "0 14px 32px rgba(0, 0, 0, 0.28)",
-                      }}
-                      labelStyle={{
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        marginBottom: "6px",
-                      }}
-                      itemStyle={{
-                        color: "#a99eff",
-                      }}
-                      labelFormatter={(_, payload) => {
-                        const item = payload?.[0]
-                          ?.payload as SpendingChartItem | undefined;
+                <div className="holo-ai-copy">
+                  <span className="holo-eyebrow">
+                    FINANCIAL INTELLIGENCE
+                  </span>
 
-                        return item?.fullMonth ?? "";
-                      }}
-                      formatter={(value) => [
-                        formatCurrency(Number(value)),
-                        "Expenses",
-                      ]}
-                    />
+                  <h2>BudgetBuddy AI</h2>
 
-                    <Bar
-                      dataKey="expenses"
-                      name="Expenses"
-                      fill="#7567ff"
-                      radius={[9, 9, 3, 3]}
-                      maxBarSize={54}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </article>
+                  <p>
+                    {insights[0]?.message ??
+                      "Your financial insights will appear here."}
+                  </p>
 
-          <article
-            className="panel goal-panel"
-            id="goals"
-          >
-            <div className="panel-header">
-              <div>
-                <span className="card-label">
-                  Savings goal
-                </span>
+                  <span className="holo-preview-tag">
+                    Rule-based preview · AI not connected
+                  </span>
 
-                <h2>Emergency fund</h2>
+                  <button
+                    type="button"
+                    className="holo-link"
+                    onClick={() => navigate("advisor")}
+                  >
+                    Explore insights
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
               </div>
+            </section>
+          )}
 
-              <Target size={21} />
-            </div>
+          {(showOverview || view === "wallet") && (
+            <section className="holo-stat-grid">
+              {[
+                {
+                  label: "Total income",
+                  value: totals.income,
+                  icon: ArrowUpRight,
+                  color: "green",
+                },
+                {
+                  label: "Total expenses",
+                  value: totals.expenses,
+                  icon: ArrowDownRight,
+                  color: "pink",
+                },
+                {
+                  label: "Net surplus",
+                  value: totals.surplus,
+                  icon: PiggyBank,
+                  color: "violet",
+                },
+                {
+                  label: "Goal savings",
+                  value: totalGoalSavings,
+                  icon: Target,
+                  color: "cyan",
+                },
+              ].map((item) => {
+                const Icon = item.icon;
 
-            <div className="goal-progress">
-              <div className="goal-ring">
-                <span>69%</span>
-              </div>
-
-              <div className="goal-details">
-                <strong>$2,760</strong>
-                <span>saved of $4,000</span>
-              </div>
-            </div>
-
-            <div className="progress-track">
-              <span />
-            </div>
-
-            <div className="goal-footer">
-              <span>$1,240 remaining</span>
-              <span>Target: Dec 2026</span>
-            </div>
-
-            <button
-              type="button"
-              className="ghost-button full-width"
-            >
-              Manage goal
-            </button>
-          </article>
-
-          <article
-            className="panel transactions-panel"
-            id="transactions"
-          >
-            <div className="panel-header">
-              <div>
-                <span className="card-label">
-                  Latest activity
-                </span>
-
-                <h2>Recent transactions</h2>
-              </div>
-
-              <span className="transaction-count">
-                {filteredTransactions.length} found
-              </span>
-            </div>
-
-            <div className="transaction-list">
-              {filteredTransactions.length === 0 ? (
-                <p className="empty-state">
-                  {searchTerm
-                    ? `No transactions found for "${searchTerm}".`
-                    : "No transactions yet."}
-                </p>
-              ) : (
-                filteredTransactions
-                  .slice(0, 5)
-                  .map((transaction) => (
+                return (
+                  <TiltCard
+                    key={item.label}
+                    className="holo-stat-card"
+                  >
                     <div
-                      className="transaction-row"
-                      key={transaction.id}
+                      className={`holo-stat-icon ${item.color}`}
                     >
-                      <div className="transaction-icon">
-                        {transaction.type === "income" ? (
-                          <CircleDollarSign size={20} />
-                        ) : (
-                          <ReceiptText size={20} />
-                        )}
-                      </div>
+                      <Icon size={21} />
+                    </div>
 
-                      <div className="transaction-info">
-                        <strong>
-                          {transaction.name}
-                        </strong>
+                    <span className="holo-eyebrow">
+                      {item.label}
+                    </span>
 
-                        <span>
-                          {transaction.category} ·{" "}
-                          {formatDate(transaction.date)}
-                        </span>
-                      </div>
+                    <strong>
+                      {money(item.value)}
+                    </strong>
 
-                      <div className="transaction-actions">
-                        <strong
-                          className={
-                            transaction.type === "income"
-                              ? "transaction-amount income"
-                              : "transaction-amount expense"
+                    <div className="holo-stat-line" />
+                  </TiltCard>
+                );
+              })}
+            </section>
+          )}
+
+          {(showAnalytics || showGoals) && (
+            <section className="holo-feature-grid">
+              {showAnalytics && (
+                <article className="holo-panel holo-chart-panel">
+                  <div className="holo-panel-header">
+                    <div>
+                      <span className="holo-eyebrow">
+                        FINANCIAL ANALYTICS
+                      </span>
+
+                      <h2>Income & spending</h2>
+                    </div>
+
+                    <select
+                      value={chartPeriod}
+                      aria-label="Chart period"
+                      onChange={(event) =>
+                        setChartPeriod(
+                          Number(
+                            event.target.value,
+                          ) as ChartPeriod,
+                        )
+                      }
+                    >
+                      <option value={3}>
+                        3 months
+                      </option>
+                      <option value={6}>
+                        6 months
+                      </option>
+                      <option value={12}>
+                        12 months
+                      </option>
+                    </select>
+                  </div>
+
+                  <div className="holo-chart-controls">
+                    {(
+                      [
+                        ["both", "Compare"],
+                        ["income", "Income"],
+                        ["expenses", "Expenses"],
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        className={
+                          chartMode === id
+                            ? "selected"
+                            : ""
+                        }
+                        onClick={() =>
+                          setChartMode(id)
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="holo-chart-totals">
+                    <div>
+                      <small>Period income</small>
+                      <strong className="holo-green">
+                        {money(chartTotals.income)}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <small>Period expenses</small>
+                      <strong className="holo-pink">
+                        {money(chartTotals.expenses)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="holo-chart-area">
+                    <ResponsiveContainer
+                      width="100%"
+                      height="100%"
+                    >
+                      <ComposedChart
+                        data={chartData}
+                        margin={{
+                          top: 16,
+                          right: 12,
+                          left: -8,
+                          bottom: 0,
+                        }}
+                      >
+                        <defs>
+                          <linearGradient
+                            id="holoIncome"
+                            x1="0"
+                            y1="1"
+                            x2="0"
+                            y2="0"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="#00d9a0"
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="#7affdc"
+                            />
+                          </linearGradient>
+
+                          <linearGradient
+                            id="holoExpense"
+                            x1="0"
+                            y1="1"
+                            x2="0"
+                            y2="0"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor="#886bff"
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor="#37e8ff"
+                            />
+                          </linearGradient>
+                        </defs>
+
+                        <CartesianGrid
+                          stroke="rgba(55,232,255,0.10)"
+                          strokeDasharray="4 5"
+                          vertical={false}
+                        />
+
+                        <XAxis
+                          dataKey="month"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fill: "#91a8c6" }}
+                        />
+
+                        <YAxis
+                          axisLine={false}
+                          tickLine={false}
+                          width={65}
+                          tick={{ fill: "#91a8c6" }}
+                          tickFormatter={(value) =>
+                            `$${value}`
                           }
+                        />
+
+                        <Tooltip
+                          contentStyle={{
+                            background: "#101d32",
+                            border:
+                              "1px solid rgba(55,232,255,.3)",
+                            borderRadius: 12,
+                          }}
+                          labelStyle={{
+                            color: "#f3f8ff",
+                          }}
+                          formatter={(value) =>
+                            money(Number(value))
+                          }
+                        />
+
+                        <Legend />
+
+                        {(chartMode === "both" ||
+                          chartMode === "income") && (
+                          <Bar
+                            dataKey="income"
+                            name="Income"
+                            fill="url(#holoIncome)"
+                            radius={[7, 7, 0, 0]}
+                            maxBarSize={35}
+                            animationDuration={1100}
+                          />
+                        )}
+
+                        {(chartMode === "both" ||
+                          chartMode === "expenses") && (
+                          <Bar
+                            dataKey="expenses"
+                            name="Expenses"
+                            fill="url(#holoExpense)"
+                            radius={[7, 7, 0, 0]}
+                            maxBarSize={35}
+                            animationDuration={1400}
+                          />
+                        )}
+
+                        {chartMode === "both" && (
+                          <Line
+                            dataKey="net"
+                            name="Net"
+                            stroke="#ffb4ec"
+                            strokeWidth={2}
+                            dot={false}
+                            type="monotone"
+                          />
+                        )}
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </article>
+              )}
+
+              {showGoals && (
+                <article className="holo-panel holo-goal-panel">
+                  <div className="holo-panel-header">
+                    <div>
+                      <span className="holo-eyebrow">
+                        SAVINGS MILESTONES
+                      </span>
+
+                      <h2>
+                        {selectedGoal
+                          ? selectedGoal.name
+                          : "Savings goals"}
+                      </h2>
+                    </div>
+
+                    <Target
+                      size={23}
+                      color="#37e8ff"
+                    />
+                  </div>
+
+                  {!selectedGoal ? (
+                    <div className="holo-empty">
+                      <PiggyBank size={36} />
+                      <p>
+                        Create a savings goal to
+                        track your milestones.
+                      </p>
+
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() =>
+                          openGoalModal()
+                        }
+                      >
+                        <Plus size={17} />
+                        Create goal
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {goals.length > 1 && (
+                        <select
+                          className="holo-goal-select"
+                          aria-label="Select goal"
+                          value={selectedGoal.id}
+                          onChange={(event) =>
+                            setSelectedGoalId(
+                              event.target.value,
+                            )
+                          }
+                        >
+                          {goals.map((goal) => (
+                            <option
+                              key={goal.id}
+                              value={goal.id}
+                            >
+                              {goal.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      <div className="holo-goal-center">
+                        <div
+                          className={`holo-progress-orbit ${
+                            goalProgress >= 100
+                              ? "goal-complete"
+                              : ""
+                          }`}
+                        >
+                          <div
+                            className="holo-progress-ring"
+                            style={{
+                              background: `conic-gradient(
+                                #37e8ff 0%,
+                                #886bff ${goalProgress}%,
+                                rgba(110,130,180,.15) 0
+                              )`,
+                            }}
+                          >
+                            <div className="holo-progress-inner">
+                              <strong>
+                                {Math.round(
+                                  goalProgress,
+                                )}
+                                %
+                              </strong>
+                              <small>
+                                COMPLETE
+                              </small>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="holo-goal-amount">
+                          <strong>
+                            {money(
+                              selectedGoal.savedAmount,
+                            )}
+                          </strong>
+
+                          <span>
+                            of{" "}
+                            {money(
+                              selectedGoal.targetAmount,
+                            )}
+                          </span>
+
+                          <small>
+                            Target{" "}
+                            {dateLabel(
+                              selectedGoal.deadline,
+                            )}
+                          </small>
+                        </div>
+                      </div>
+
+                      <div className="holo-milestones">
+                        {goalMilestones.map((step) => (
+                          <div
+                            key={step}
+                            className={
+                              goalProgress >= step
+                                ? "reached"
+                                : ""
+                            }
+                          >
+                            <span>
+                              {goalProgress >= step ? (
+                                <Check size={13} />
+                              ) : (
+                                <Zap size={12} />
+                              )}
+                            </span>
+                            <small>{step}%</small>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="holo-progress-track">
+                        <span
+                          style={{
+                            width: `${goalProgress}%`,
+                          }}
+                        />
+                      </div>
+
+                      <p className="holo-goal-remaining">
+                        {goalProgress >= 100
+                          ? "Milestone complete! Goal reached."
+                          : `${money(
+                              Math.max(
+                                0,
+                                selectedGoal.targetAmount -
+                                  selectedGoal.savedAmount,
+                              ),
+                            )} remaining`}
+                      </p>
+
+                      <div className="holo-goal-actions">
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={() =>
+                            openContribution(
+                              selectedGoal,
+                              "deposit",
+                            )
+                          }
+                        >
+                          <Plus size={16} />
+                          Add savings
+                        </button>
+
+                        <button
+                          type="button"
+                          className="ghost-button"
+                          disabled={
+                            selectedGoal.savedAmount <= 0
+                          }
+                          onClick={() =>
+                            openContribution(
+                              selectedGoal,
+                              "withdrawal",
+                            )
+                          }
+                        >
+                          Withdraw
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="ghost-button holo-full-button"
+                        onClick={() =>
+                          setGoalManagerOpen(true)
+                        }
+                      >
+                        Manage goals ({goals.length})
+                      </button>
+                    </>
+                  )}
+                </article>
+              )}
+            </section>
+          )}
+
+          {showInsights && (
+            <section className="holo-panel holo-insights-panel">
+              <div className="holo-panel-header">
+                <div>
+                  <span className="holo-eyebrow">
+                    DATA-DRIVEN INSIGHTS
+                  </span>
+                  <h2>Financial intelligence</h2>
+                </div>
+
+                <Sparkles
+                  size={22}
+                  color="#37e8ff"
+                />
+              </div>
+
+              <div className="holo-insights-grid">
+                {insights.map((insight, index) => (
+                  <div
+                    className={`holo-insight ${insight.tone}`}
+                    key={`${insight.title}-${index}`}
+                  >
+                    <div className="holo-insight-icon">
+                      {insight.tone === "warning" ? (
+                        <AlertTriangle size={19} />
+                      ) : insight.tone === "good" ? (
+                        <TrendingUp size={19} />
+                      ) : (
+                        <Activity size={19} />
+                      )}
+                    </div>
+
+                    <div>
+                      <strong>
+                        {insight.title}
+                      </strong>
+
+                      <p>
+                        {insight.message}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <p className="holo-disclaimer">
+                These insights are calculated from
+                locally recorded data. They are not
+                personalized financial advice or
+                AI-generated recommendations.
+              </p>
+            </section>
+          )}
+
+          {showTransactions && (
+            <section className="holo-panel holo-transactions-panel">
+              <div className="holo-panel-header">
+                <div>
+                  <span className="holo-eyebrow">
+                    TRANSACTION MANAGEMENT
+                  </span>
+                  <h2>
+                    {view === "transactions"
+                      ? "All transactions"
+                      : "Recent transactions"}
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={openAddTransaction}
+                >
+                  <Plus size={17} />
+                  Add
+                </button>
+              </div>
+
+              <div className="holo-filter-bar">
+                <label className="holo-search">
+                  <Search size={17} />
+                  <input
+                    type="search"
+                    placeholder="Search transactions"
+                    value={search}
+                    onChange={(event) =>
+                      setSearch(event.target.value)
+                    }
+                  />
+                </label>
+
+                <select
+                  aria-label="Filter transaction type"
+                  value={transactionType}
+                  onChange={(event) =>
+                    setTransactionType(
+                      event.target.value,
+                    )
+                  }
+                >
+                  <option value="all">
+                    All types
+                  </option>
+                  <option value="income">
+                    Income
+                  </option>
+                  <option value="expense">
+                    Expenses
+                  </option>
+                </select>
+
+                <select
+                  aria-label="Filter category"
+                  value={transactionCategory}
+                  onChange={(event) =>
+                    setTransactionCategory(
+                      event.target.value,
+                    )
+                  }
+                >
+                  <option value="all">
+                    All categories
+                  </option>
+
+                  {categories.map((category) => (
+                    <option
+                      key={category}
+                      value={category}
+                    >
+                      {category}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  aria-label="Sort transactions"
+                  value={sortOrder}
+                  onChange={(event) =>
+                    setSortOrder(event.target.value)
+                  }
+                >
+                  <option value="newest">
+                    Newest
+                  </option>
+                  <option value="oldest">
+                    Oldest
+                  </option>
+                  <option value="highest">
+                    Highest amount
+                  </option>
+                  <option value="lowest">
+                    Lowest amount
+                  </option>
+                </select>
+              </div>
+
+              <div className="holo-transaction-list">
+                {filteredTransactions.length === 0 ? (
+                  <div className="holo-empty">
+                    No matching transactions.
+                  </div>
+                ) : (
+                  filteredTransactions
+                    .slice(
+                      0,
+                      view === "transactions"
+                        ? undefined
+                        : 5,
+                    )
+                    .map((transaction) => (
+                      <div
+                        className="holo-transaction"
+                        key={transaction.id}
+                      >
+                        <div
+                          className={`holo-transaction-icon ${
+                            transaction.type
+                          }`}
+                        >
+                          {transaction.type ===
+                          "income" ? (
+                            <ArrowDownLeft size={19} />
+                          ) : (
+                            <ArrowUpRight size={19} />
+                          )}
+                        </div>
+
+                        <div className="holo-transaction-details">
+                          <strong>
+                            {transaction.name}
+                          </strong>
+
+                          <span>
+                            {transaction.category} ·{" "}
+                            {dateLabel(
+                              transaction.date,
+                            )}
+                          </span>
+                        </div>
+
+                        <strong
+                          className={`holo-transaction-amount ${
+                            transaction.type
+                          }`}
                         >
                           {transaction.type === "income"
                             ? "+"
                             : "-"}
-                          {formatCurrency(
+                          {money(
                             transaction.amount,
                           )}
                         </strong>
 
                         <button
                           type="button"
-                          className="transaction-edit-button"
+                          className="holo-icon-action"
                           aria-label={`Edit ${transaction.name}`}
-                          title="Edit transaction"
-                          onClick={() =>
-                            handleOpenEditModal(transaction)
-                          }
+                          onClick={() => {
+                            setEditingTransaction(
+                              transaction,
+                            );
+                            setTransactionModalOpen(
+                              true,
+                            );
+                          }}
                         >
                           <Pencil size={16} />
                         </button>
 
                         <button
                           type="button"
-                          className="transaction-delete-button"
+                          className="holo-icon-action danger"
                           aria-label={`Delete ${transaction.name}`}
-                          title="Delete transaction"
                           onClick={() =>
-                            handleDeleteTransaction(
-                              transaction.id,
+                            deleteTransaction(
+                              transaction,
                             )
                           }
                         >
                           <Trash2 size={16} />
                         </button>
                       </div>
-                    </div>
-                  ))
+                    ))
+                )}
+              </div>
+
+              {view === "dashboard" &&
+                filteredTransactions.length > 5 && (
+                  <button
+                    type="button"
+                    className="holo-link"
+                    onClick={() =>
+                      navigate("transactions")
+                    }
+                  >
+                    View all transactions
+                    <ChevronRight size={17} />
+                  </button>
+                )}
+            </section>
+          )}
+
+          {showActivity && (
+            <section className="holo-panel holo-activity-panel">
+              <div className="holo-panel-header">
+                <div>
+                  <span className="holo-eyebrow">
+                    FINANCIAL ACTIVITY
+                  </span>
+                  <h2>Activity timeline</h2>
+                </div>
+
+                <Activity
+                  size={21}
+                  color="#37e8ff"
+                />
+              </div>
+
+              <div className="holo-timeline">
+                {activity.length === 0 ? (
+                  <div className="holo-empty">
+                    Your activity will appear here.
+                  </div>
+                ) : (
+                  activity
+                    .slice(
+                      0,
+                      showAllActivity
+                        ? undefined
+                        : 6,
+                    )
+                    .map((item) => (
+                      <div
+                        className="holo-timeline-item"
+                        key={item.id}
+                      >
+                        <div className="holo-timeline-node" />
+
+                        <div className="holo-timeline-info">
+                          <strong>
+                            {item.title}
+                          </strong>
+
+                          <span>
+                            {item.subtitle} ·{" "}
+                            {dateLabel(item.date)}
+                          </span>
+                        </div>
+
+                        <strong
+                          className={
+                            item.type === "income" ||
+                            item.type === "deposit"
+                              ? "holo-green"
+                              : "holo-pink"
+                          }
+                        >
+                          {item.type === "income" ||
+                          item.type === "deposit"
+                            ? "+"
+                            : "-"}
+                          {money(item.amount)}
+                        </strong>
+                      </div>
+                    ))
+                )}
+              </div>
+
+              {activity.length > 6 && (
+                <button
+                  type="button"
+                  className="holo-link"
+                  onClick={() =>
+                    setShowAllActivity(
+                      (current) => !current,
+                    )
+                  }
+                >
+                  {showAllActivity
+                    ? "Show less"
+                    : "Show full timeline"}
+                  <ChevronRight size={16} />
+                </button>
               )}
-            </div>
-          </article>
+            </section>
+          )}
 
-          <article className="panel budget-panel">
-            <div className="panel-header">
-              <div>
-                <span className="card-label">
-                  Budget status
-                </span>
+          {showOverview && (
+            <section className="holo-panel holo-budget-panel">
+              <div className="holo-panel-header">
+                <div>
+                  <span className="holo-eyebrow">
+                    SPENDING BREAKDOWN
+                  </span>
+                  <h2>Budget categories</h2>
+                </div>
 
-                <h2>Top categories</h2>
+                <BarChart3
+                  size={21}
+                  color="#37e8ff"
+                />
+              </div>
+
+              {categorySpending.length === 0 ? (
+                <div className="holo-empty">
+                  No expense categories yet.
+                </div>
+              ) : (
+                <div className="holo-budget-grid">
+                  {categorySpending
+                    .slice(0, 6)
+                    .map((item) => (
+                      <div
+                        className="holo-budget-item"
+                        key={item.category}
+                      >
+                        <div className="holo-budget-top">
+                          <strong>
+                            {item.category}
+                          </strong>
+
+                          <span>
+                            {money(item.spent)} /{" "}
+                            {money(item.budget)}
+                          </span>
+                        </div>
+
+                        <div className="holo-progress-track">
+                          <span
+                            className={
+                              item.over
+                                ? "over-budget"
+                                : ""
+                            }
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                item.used,
+                              )}%`,
+                            }}
+                          />
+                        </div>
+
+                        <small>
+                          {Math.round(
+                            item.used,
+                          )}
+                          % used
+                          {item.over
+                            ? " · Over budget"
+                            : ""}
+                        </small>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {view === "settings" && (
+            <section className="holo-panel holo-settings-panel">
+              <div className="holo-panel-header">
+                <div>
+                  <span className="holo-eyebrow">
+                    INTERFACE CUSTOMIZATION
+                  </span>
+
+                  <h2>Holographic settings</h2>
+                </div>
+
+                <Settings
+                  size={22}
+                  color="#37e8ff"
+                />
+              </div>
+
+              <div className="holo-setting-row">
+                <div>
+                  <strong>
+                    Holographic glow
+                  </strong>
+
+                  <p>
+                    Adjust the brightness of
+                    holographic lighting.
+                  </p>
+                </div>
+
+                <div className="holo-setting-control">
+                  <strong>
+                    {settings.glow}%
+                  </strong>
+
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={settings.glow}
+                    onChange={(event) =>
+                      updateSettings({
+                        glow: Number(
+                          event.target.value,
+                        ),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="holo-setting-row">
+                <div>
+                  <strong>
+                    Animation intensity
+                  </strong>
+
+                  <p>
+                    Choose how much movement the
+                    dashboard uses.
+                  </p>
+                </div>
+
+                <select
+                  value={settings.motion}
+                  onChange={(event) =>
+                    updateSettings({
+                      motion: event.target
+                        .value as
+                        | "minimal"
+                        | "balanced"
+                        | "immersive",
+                    })
+                  }
+                >
+                  <option value="minimal">
+                    Minimal
+                  </option>
+                  <option value="balanced">
+                    Balanced
+                  </option>
+                  <option value="immersive">
+                    Immersive
+                  </option>
+                </select>
+              </div>
+
+              <div className="holo-setting-row">
+                <div>
+                  <strong>
+                    Floating particles
+                  </strong>
+
+                  <p>
+                    Ambient animated particles
+                    in the background.
+                  </p>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={settings.particles}
+                  onChange={(event) =>
+                    updateSettings({
+                      particles:
+                        event.target.checked,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="holo-setting-row">
+                <div>
+                  <strong>
+                    3D card movement
+                  </strong>
+
+                  <p>
+                    Allow the wallet card to
+                    tilt with your pointer.
+                  </p>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={settings.tilt}
+                  onChange={(event) =>
+                    updateSettings({
+                      tilt: event.target.checked,
+                    })
+                  }
+                />
               </div>
 
               <button
                 type="button"
-                className="icon-button"
-                aria-label="Budget options"
+                className="ghost-button"
+                onClick={resetSettings}
               >
-                <Menu size={18} />
+                <RotateCcw size={17} />
+                Reset to Holo defaults
               </button>
-            </div>
 
-            <div className="budget-category">
-              <div className="category-heading">
-                <span>Food and dining</span>
-                <strong>$410 / $550</strong>
-              </div>
-
-              <div className="progress-track">
-                <span style={{ width: "75%" }} />
-              </div>
-            </div>
-
-            <div className="budget-category">
-              <div className="category-heading">
-                <span>Transportation</span>
-                <strong>$260 / $400</strong>
-              </div>
-
-              <div className="progress-track">
-                <span style={{ width: "65%" }} />
-              </div>
-            </div>
-
-            <div className="budget-category">
-              <div className="category-heading">
-                <span>Entertainment</span>
-                <strong>$145 / $300</strong>
-              </div>
-
-              <div className="progress-track">
-                <span style={{ width: "48%" }} />
-              </div>
-            </div>
-          </article>
-        </section>
+              <p className="holo-disclaimer">
+                Your appearance preferences are
+                saved locally. System reduced-motion
+                preferences take priority.
+              </p>
+            </section>
+          )}
+        </div>
       </main>
 
       <AddTransactionModal
-        isOpen={isModalOpen}
+        isOpen={transactionModalOpen}
         transactionToEdit={editingTransaction}
-        onClose={handleCloseModal}
-        onAdd={handleAddTransaction}
-        onUpdate={handleUpdateTransaction}
+        onClose={closeTransactionModal}
+        onAdd={addTransaction}
+        onUpdate={updateTransaction}
       />
+
+      <SavingsGoalModal
+        isOpen={goalModalOpen}
+        goalToEdit={editingGoal}
+        onClose={() => {
+          setGoalModalOpen(false);
+          setEditingGoal(null);
+        }}
+        onSave={saveGoal}
+      />
+
+      {goalManagerOpen && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setGoalManagerOpen(false);
+            }
+          }}
+        >
+          <section
+            className="transaction-modal holo-manager-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="holo-manager-title"
+          >
+            <div className="modal-header">
+              <div>
+                <span className="card-label">
+                  GOAL MANAGEMENT
+                </span>
+                <h2 id="holo-manager-title">
+                  Savings goals
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                className="holo-icon-action"
+                aria-label="Close"
+                onClick={() =>
+                  setGoalManagerOpen(false)
+                }
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="holo-manager-summary">
+              <span>Total saved</span>
+              <strong>
+                {money(totalGoalSavings)}
+              </strong>
+            </div>
+
+            <div className="holo-manager-list">
+              {goals.map((goal) => (
+                <div
+                  className="holo-manager-item"
+                  key={goal.id}
+                >
+                  <strong>
+                    {goal.name}
+                  </strong>
+
+                  <span>
+                    {money(goal.savedAmount)} /{" "}
+                    {money(goal.targetAmount)}
+                  </span>
+
+                  <small>
+                    Target {dateLabel(goal.deadline)}
+                  </small>
+
+                  <div className="holo-progress-track">
+                    <span
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          percent(
+                            goal.savedAmount,
+                            goal.targetAmount,
+                          ),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="holo-manager-actions">
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => {
+                        setSelectedGoalId(goal.id);
+                        setGoalManagerOpen(false);
+                        navigate("goals");
+                      }}
+                    >
+                      View
+                    </button>
+
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => {
+                        setGoalManagerOpen(false);
+                        openGoalModal(goal);
+                      }}
+                    >
+                      <Pencil size={15} />
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() =>
+                        deleteGoal(goal)
+                      }
+                    >
+                      <Trash2 size={15} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {selectedGoal && (
+              <div className="holo-manager-history">
+                <h3>
+                  {selectedGoal.name} history
+                </h3>
+
+                {contributions
+                  .filter(
+                    (c) =>
+                      c.goalId === selectedGoal.id,
+                  )
+                  .sort(
+                    (a, b) =>
+                      dateTime(b.createdAt) -
+                      dateTime(a.createdAt),
+                  )
+                  .slice(0, 5)
+                  .map((c) => (
+                    <div
+                      className="holo-manager-history-row"
+                      key={c.id}
+                    >
+                      <span>
+                        {c.type === "deposit"
+                          ? "Deposit"
+                          : "Withdrawal"}
+                        <small>
+                          {dateLabel(c.createdAt)}
+                        </small>
+                      </span>
+
+                      <strong>
+                        {c.type === "deposit"
+                          ? "+"
+                          : "-"}
+                        {money(c.amount)}
+                      </strong>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() =>
+                  setGoalManagerOpen(false)
+                }
+              >
+                Close
+              </button>
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  setGoalManagerOpen(false);
+                  openGoalModal();
+                }}
+              >
+                <Plus size={16} />
+                New goal
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {contributionGoal && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setContributionGoalId(null);
+            }
+          }}
+        >
+          <section
+            className="transaction-modal holo-manager-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="holo-contribution-title"
+          >
+            <div className="modal-header">
+              <div>
+                <span className="card-label">
+                  {contributionGoal.name}
+                </span>
+
+                <h2 id="holo-contribution-title">
+                  {contributionType === "deposit"
+                    ? "Add savings"
+                    : "Withdraw savings"}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                className="holo-icon-action"
+                aria-label="Close"
+                onClick={() =>
+                  setContributionGoalId(null)
+                }
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              className="transaction-form"
+              onSubmit={saveContribution}
+            >
+              <div className="holo-manager-summary">
+                <span>Currently saved</span>
+                <strong>
+                  {money(
+                    contributionGoal.savedAmount,
+                  )}
+                </strong>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="holo-amount">
+                  Amount ($)
+                </label>
+
+                <input
+                  id="holo-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={contributionAmount}
+                  onChange={(event) => {
+                    setContributionAmount(
+                      event.target.value,
+                    );
+                    setContributionError("");
+                  }}
+                  placeholder="0.00"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              {contributionError && (
+                <p
+                  className="form-error"
+                  role="alert"
+                >
+                  {contributionError}
+                </p>
+              )}
+
+              <p className="holo-disclaimer">
+                This is a simulated savings record.
+                It does not move money or change
+                your transaction balance.
+              </p>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() =>
+                    setContributionGoalId(null)
+                  }
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                >
+                  Confirm{" "}
+                  {contributionType === "deposit"
+                    ? "deposit"
+                    : "withdrawal"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <HoloEffects>
+      <DashboardContent />
+    </HoloEffects>
   );
 }
