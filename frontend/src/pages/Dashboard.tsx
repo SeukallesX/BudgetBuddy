@@ -61,6 +61,10 @@ import SavingsGoalModal, {
 
 import "../styles/holo-2.1-layout.css";
 
+import FinancialForecast from "../components/FinancialForecast";
+import "../styles/holo-forecast.css";
+import SavingsForecast from "../components/SavingsForecast";
+
 import HoloEffects, {
   TiltCard,
   useHolo,
@@ -1607,6 +1611,11 @@ function DashboardContent() {
                             )} remaining`}
                       </p>
 
+                        <SavingsForecast
+                          key={selectedGoal.id}
+                          goal={selectedGoal}
+                        />
+
                       <div className="holo-goal-actions">
                         <button
                           type="button"
@@ -1653,6 +1662,13 @@ function DashboardContent() {
                 </article>
               )}
             </section>
+          )}
+
+          {/* PHASE 4B — FINANCIAL FORECASTING */}
+          {showOverview && (
+            <FinancialForecast
+              transactions={transactions}
+            />
           )}
 
           {showInsights && (
